@@ -1,11 +1,10 @@
-version: '3.8'
 services:
   postgres:
     image: postgres:15
     environment:
       POSTGRES_DB: instagrano
       POSTGRES_PASSWORD: pass
-    ports: ["5432:5432"]
+    ports: ["5433:5432"]
   localstack:
     image: localstack/localstack
     ports: ["4566:4566"]

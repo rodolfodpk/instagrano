@@ -2,12 +2,15 @@ package server
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/yourusername/instagrano/internal/docs"
-	"github.com/yourusername/instagrano/internal/handlers"
+	"github.com/rodolfo/instagrano/internal/docs"
+	"github.com/rodolfo/instagrano/internal/handlers"
 )
 
 func Start() {
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		DisableStartupMessage: false,
+	})
+
 	docs.SetupSwagger(app)
 	app.Get("/", handlers.Home)
 	app.Post("/register", handlers.Register)
@@ -15,6 +18,7 @@ func Start() {
 	app.Post("/upload", handlers.Upload)
 	app.Get("/feed", handlers.Feed)
 	app.Post("/posts/:id/like", handlers.Like)
-	app.Post("/posts/:id/comments", handlers.Comment)
+	app.Post("/posts/:id/comments", handlers.AddComment)
+
 	app.Listen(":3000")
 }
