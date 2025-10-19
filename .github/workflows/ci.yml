@@ -1,0 +1,19 @@
+name: Instagrano CI/CD
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
+      with: {go-version: '1.23.x'}
+    - run: go mod download
+    - run: make test-full
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: dyc3/railway-deploy@master
+      env:
+        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

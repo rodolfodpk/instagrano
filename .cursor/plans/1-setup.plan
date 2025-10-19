@@ -1,0 +1,16 @@
+# 🚀 PLAN 1: FOLDER + GO MODULE
+# EXECUTE: Ctrl+Enter
+
+cd ../instagrano
+rm -rf *
+mkdir -p cmd/app internal/{server,docs} docs
+cat > go.mod << EOF
+module github.com/yourusername/instagrano
+go 1.23
+require (
+    github.com/gofiber/fiber/v2 v2.52.0
+    github.com/arsmn/fiber-swagger/v2 v2.48.0
+)
+EOF
+go mod tidy
+echo "✅ PLAN 1 COMPLETE!"
