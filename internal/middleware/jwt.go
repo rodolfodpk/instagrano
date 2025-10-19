@@ -16,6 +16,10 @@ func JWT(jwtSecret string) fiber.Handler {
         }
 
         tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+        
+        // Debug logging
+        fmt.Printf("JWT Secret: %s\n", jwtSecret)
+        fmt.Printf("Token: %s\n", tokenString)
 
         token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
             if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -24,7 +28,13 @@ func JWT(jwtSecret string) fiber.Handler {
             return []byte(jwtSecret), nil
         })
 
-        if err != nil || !token.Valid {
+        if err != nil {
+            fmt.Printf("JWT Parse Error: %v\n", err)
+            return c.Status(401).JSON(fiber.Map{"error": "invalid token"})
+        }
+        
+        if !token.Valid {
+            fmt.Printf("Token is not valid\n")
             return c.Status(401).JSON(fiber.Map{"error": "invalid token"})
         }
 

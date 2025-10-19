@@ -20,7 +20,7 @@ func (h *PostHandler) CreatePost(c *fiber.Ctx) error {
     userID := c.Locals("userID").(uint)
 
     // Parse multipart form
-    form, err := c.MultipartForm()
+    _, err := c.MultipartForm()
     if err != nil {
         return c.Status(400).JSON(fiber.Map{"error": "invalid form data"})
     }

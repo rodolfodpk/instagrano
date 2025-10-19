@@ -27,13 +27,13 @@ func NewMediaStorage(endpoint, region, bucket string) (MediaStorage, error) {
     customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
         if service == s3.ServiceID {
             return aws.Endpoint{
-                URI: endpoint,
+                URL: endpoint,
             }, nil
         }
         return aws.Endpoint{}, &aws.EndpointNotFoundError{}
     })
 
-    cfg, err := config.LoadDefaultAWSConfig(context.TODO(),
+    cfg, err := config.LoadDefaultConfig(context.TODO(),
         config.WithRegion(region),
         config.WithEndpointResolverWithOptions(customResolver),
         config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("test", "test", "")),
