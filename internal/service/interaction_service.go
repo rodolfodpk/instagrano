@@ -6,11 +6,15 @@ import (
 )
 
 type InteractionService struct {
-    likeRepo postgres.LikeRepository
+    likeRepo    postgres.LikeRepository
+    commentRepo postgres.CommentRepository
 }
 
-func NewInteractionService(likeRepo postgres.LikeRepository) *InteractionService {
-    return &InteractionService{likeRepo: likeRepo}
+func NewInteractionService(likeRepo postgres.LikeRepository, commentRepo postgres.CommentRepository) *InteractionService {
+    return &InteractionService{
+        likeRepo:    likeRepo,
+        commentRepo: commentRepo,
+    }
 }
 
 func (s *InteractionService) LikePost(userID, postID uint) error {
@@ -24,4 +28,18 @@ func (s *InteractionService) LikePost(userID, postID uint) error {
     }
 
     return s.likeRepo.IncrementPostLikeCount(postID)
+}
+
+func (s *InteractionService) CommentPost(userID, postID uint, text string) error {
+    comment := &domain.Comment{
+        UserID: userID,
+        PostID: postID,
+        Text:   text,
+    }
+
+    if err := s.commentRepo.Create(comment); err != nil {
+        return err
+    }
+
+    return s.commentRepo.IncrementPostCommentCount(postID)
 }
