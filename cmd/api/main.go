@@ -40,6 +40,9 @@ func main() {
 
     app := fiber.New()
 
+    // Serve static files
+    app.Static("/", "./web/public")
+
     app.Get("/health", func(c *fiber.Ctx) error {
         return c.JSON(fiber.Map{
             "status":   "ok",

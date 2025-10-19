@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Instagrano - Feed</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        body { font-family: Arial; max-width: 600px; margin: 20px auto; }
+        .post { border: 1px solid #ddd; margin: 20px 0; padding: 15px; }
+        .post-header { font-weight: bold; margin-bottom: 10px; }
+        .post-image { width: 100%; max-width: 500px; }
+        .post-actions { margin-top: 10px; }
+        button { padding: 5px 10px; margin-right: 10px; }
+        .like-btn { background: #e74c3c; color: white; border: none; }
+        .comment-btn { background: #3498db; color: white; border: none; }
+        .error { color: red; }
+        .loading { text-align: center; }
+    </style>
+</head>
+<body>
+    <div x-data="feedApp()">
+        <h1>Instagrano Feed</h1>
+        <button @click="logout">Logout</button>
+        
+        <div class="loading" x-show="loading">Loading posts...</div>
+        <div class="error" x-show="error" x-text="error"></div>
+        
+        <div x-show="posts.length > 0">
+            <div class="post" x-repeat="post in posts" :key="post.id">
+                <div class="post-header">Post #<span x-text="post.id"></span></div>
+                <div x-text="post.title"></div>
+                <div x-text="post.caption"></div>
+                <img :src="post.media_url" :alt="post.title" class="post-image">
+                <div class="post-actions">
+                    <button class="like-btn" @click="likePost(post.id)">
+                        Like (<span x-text="post.likes_count"></span>)
+                    </button>
+                    <button class="comment-btn" @click="showCommentForm(post.id)">
+                        Comment (<span x-text="post.comments_count"></span>)
+                    </button>
+                </div>
+                <div x-show="commentingPostId === post.id">
+                    <input x-model="newComment" placeholder="Add a comment...">
+                    <button @click="addComment(post.id)">Post</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+    function feedApp() {
+        return {
+            posts: [],
+            loading: true,
+            error: '',
+            commentingPostId: null,
+            newComment: '',
+            
+            async init() {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    window.location.href = '/';
+                    return;
+                }
+                await this.loadFeed();
+            },
+            
+            async loadFeed() {
+                try {
+                    this.loading = true;
+                    const token = localStorage.getItem('token');
+                    const response = await fetch('/api/feed', {
+                        headers: {'Authorization': `Bearer ${token}`}
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.posts = data.posts || [];
+                    } else {
+                        this.error = 'Failed to load feed';
+                    }
+                } catch (e) {
+                    this.error = 'Network error';
+                } finally {
+                    this.loading = false;
+                }
+            },
+            
+            async likePost(postId) {
+                try {
+                    const token = localStorage.getItem('token');
+                    const response = await fetch(`/api/posts/${postId}/like`, {
+                        method: 'POST',
+                        headers: {'Authorization': `Bearer ${token}`}
+                    });
+                    
+                    if (response.ok) {
+                        await this.loadFeed(); // Reload to get updated counts
+                    }
+                } catch (e) {
+                    this.error = 'Failed to like post';
+                }
+            },
+            
+            showCommentForm(postId) {
+                this.commentingPostId = postId;
+                this.newComment = '';
+            },
+            
+            async addComment(postId) {
+                try {
+                    const token = localStorage.getItem('token');
+                    const response = await fetch(`/api/posts/${postId}/comment`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({text: this.newComment})
+                    });
+                    
+                    if (response.ok) {
+                        this.commentingPostId = null;
+                        this.newComment = '';
+                        await this.loadFeed(); // Reload to get updated counts
+                    }
+                } catch (e) {
+                    this.error = 'Failed to add comment';
+                }
+            },
+            
+            logout() {
+                localStorage.removeItem('token');
+                window.location.href = '/';
+            }
+        }
+    }
+    </script>
+</body>
+</html>
