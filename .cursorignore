@@ -1,0 +1,17 @@
+*.exe
+*.dll
+*.so
+*.dylib
+*.out
+.DS_Store
+.vscode/
+.idea/
+.env
+.env.local
+.cursor/
+vendor/
+.legacy-backup/
+docs/docs.go
+docs/swagger.json
+docs/swagger.yaml
+
