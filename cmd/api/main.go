@@ -27,10 +27,12 @@ func main() {
     // Initialize services
     authService := service.NewAuthService(userRepo, cfg.JWTSecret)
     postService := service.NewPostService(postRepo)
+    feedService := service.NewFeedService(postRepo)
 
     // Initialize handlers
     authHandler := handler.NewAuthHandler(authService)
     postHandler := handler.NewPostHandler(postService)
+    feedHandler := handler.NewFeedHandler(feedService)
 
     app := fiber.New()
 
@@ -54,6 +56,7 @@ func main() {
     })
     protected.Post("/posts", postHandler.CreatePost)
     protected.Get("/posts/:id", postHandler.GetPost)
+    protected.Get("/feed", feedHandler.GetFeed)
 
     log.Printf("🚀 Server starting on port %s", cfg.Port)
     log.Fatal(app.Listen(":" + cfg.Port))
