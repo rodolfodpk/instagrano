@@ -22,12 +22,15 @@ func main() {
 
     // Initialize repositories
     userRepo := postgres.NewUserRepository(db)
+    postRepo := postgres.NewPostRepository(db)
 
     // Initialize services
     authService := service.NewAuthService(userRepo, cfg.JWTSecret)
+    postService := service.NewPostService(postRepo)
 
     // Initialize handlers
     authHandler := handler.NewAuthHandler(authService)
+    postHandler := handler.NewPostHandler(postService)
 
     app := fiber.New()
 
@@ -49,6 +52,8 @@ func main() {
         userID := c.Locals("userID").(uint)
         return c.JSON(fiber.Map{"user_id": userID})
     })
+    protected.Post("/posts", postHandler.CreatePost)
+    protected.Get("/posts/:id", postHandler.GetPost)
 
     log.Printf("🚀 Server starting on port %s", cfg.Port)
     log.Fatal(app.Listen(":" + cfg.Port))
