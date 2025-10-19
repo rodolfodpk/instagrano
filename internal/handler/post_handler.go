@@ -19,17 +19,39 @@ func NewPostHandler(postService *service.PostService) *PostHandler {
 func (h *PostHandler) CreatePost(c *fiber.Ctx) error {
     userID := c.Locals("userID").(uint)
 
-    var req struct {
-        Title     string           `json:"title"`
-        Caption   string           `json:"caption"`
-        MediaType domain.MediaType `json:"media_type"`
+    // Parse multipart form
+    form, err := c.MultipartForm()
+    if err != nil {
+        return c.Status(400).JSON(fiber.Map{"error": "invalid form data"})
     }
 
-    if err := c.BodyParser(&req); err != nil {
-        return c.Status(400).JSON(fiber.Map{"error": "invalid request"})
+    title := c.FormValue("title")
+    caption := c.FormValue("caption")
+    mediaTypeStr := c.FormValue("media_type")
+
+    if title == "" {
+        return c.Status(400).JSON(fiber.Map{"error": "title is required"})
     }
 
-    post, err := h.postService.CreatePost(userID, req.Title, req.Caption, req.MediaType)
+    mediaType := domain.MediaType(mediaTypeStr)
+    if mediaType != domain.MediaTypeImage && mediaType != domain.MediaTypeVideo {
+        mediaType = domain.MediaTypeImage // default
+    }
+
+    // Get uploaded file
+    file, err := c.FormFile("media")
+    if err != nil {
+        return c.Status(400).JSON(fiber.Map{"error": "media file is required"})
+    }
+
+    // Open file
+    fileReader, err := file.Open()
+    if err != nil {
+        return c.Status(400).JSON(fiber.Map{"error": "failed to open file"})
+    }
+    defer fileReader.Close()
+
+    post, err := h.postService.CreatePost(userID, title, caption, mediaType, fileReader, file.Filename)
     if err != nil {
         return c.Status(400).JSON(fiber.Map{"error": err.Error()})
     }

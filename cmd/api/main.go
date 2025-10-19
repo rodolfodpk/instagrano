@@ -8,6 +8,7 @@ import (
     "github.com/rodolfodpk/instagrano/internal/handler"
     "github.com/rodolfodpk/instagrano/internal/middleware"
     "github.com/rodolfodpk/instagrano/internal/repository/postgres"
+    "github.com/rodolfodpk/instagrano/internal/repository/s3"
     "github.com/rodolfodpk/instagrano/internal/service"
 )
 
@@ -25,10 +26,16 @@ func main() {
     postRepo := postgres.NewPostRepository(db)
     likeRepo := postgres.NewLikeRepository(db)
     commentRepo := postgres.NewCommentRepository(db)
+    
+    // Initialize S3 storage
+    mediaStorage, err := s3.NewMediaStorage(cfg.S3Endpoint, "us-east-1", cfg.S3Bucket)
+    if err != nil {
+        log.Fatal("Failed to initialize S3 storage:", err)
+    }
 
     // Initialize services
     authService := service.NewAuthService(userRepo, cfg.JWTSecret)
-    postService := service.NewPostService(postRepo)
+    postService := service.NewPostService(postRepo, mediaStorage)
     feedService := service.NewFeedService(postRepo)
     interactionService := service.NewInteractionService(likeRepo, commentRepo)
 

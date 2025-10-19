@@ -31,6 +31,7 @@
                 <option value="image">Image</option>
                 <option value="video">Video</option>
             </select>
+            <input type="file" x-ref="fileInput" accept="image/*,video/*" style="width: 100%; padding: 10px; margin: 5px 0;">
             <button @click="createPost" style="width: 100%; padding: 10px; background: #28a745; color: white; border: none;">Create Post</button>
         </div>
         
@@ -85,23 +86,32 @@
             async createPost() {
                 try {
                     const token = localStorage.getItem('token');
+                    const fileInput = this.$refs.fileInput;
+                    
+                    if (!fileInput.files[0]) {
+                        this.error = 'Please select a file';
+                        return;
+                    }
+                    
+                    const formData = new FormData();
+                    formData.append('title', this.newPost.title);
+                    formData.append('caption', this.newPost.caption);
+                    formData.append('media_type', this.newPost.mediaType);
+                    formData.append('media', fileInput.files[0]);
+                    
                     const response = await fetch('/api/posts', {
                         method: 'POST',
                         headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
+                            'Authorization': `Bearer ${token}`
                         },
-                        body: JSON.stringify({
-                            title: this.newPost.title,
-                            caption: this.newPost.caption,
-                            media_type: this.newPost.mediaType
-                        })
+                        body: formData
                     });
                     
                     if (response.ok) {
                         this.newPost.title = '';
                         this.newPost.caption = '';
                         this.newPost.mediaType = 'image';
+                        fileInput.value = '';
                         await this.loadFeed(); // Reload to show new post
                     } else {
                         this.error = 'Failed to create post';
