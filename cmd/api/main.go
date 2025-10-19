@@ -6,6 +6,7 @@ import (
     "github.com/gofiber/fiber/v2"
     "github.com/rodolfodpk/instagrano/internal/config"
     "github.com/rodolfodpk/instagrano/internal/handler"
+    "github.com/rodolfodpk/instagrano/internal/middleware"
     "github.com/rodolfodpk/instagrano/internal/repository/postgres"
     "github.com/rodolfodpk/instagrano/internal/service"
 )
@@ -41,6 +42,13 @@ func main() {
     api := app.Group("/api")
     api.Post("/auth/register", authHandler.Register)
     api.Post("/auth/login", authHandler.Login)
+
+    // Protected routes
+    protected := api.Group("/", middleware.JWT(cfg.JWTSecret))
+    protected.Get("/me", func(c *fiber.Ctx) error {
+        userID := c.Locals("userID").(uint)
+        return c.JSON(fiber.Map{"user_id": userID})
+    })
 
     log.Printf("🚀 Server starting on port %s", cfg.Port)
     log.Fatal(app.Listen(":" + cfg.Port))
