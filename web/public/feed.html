@@ -22,6 +22,18 @@
         <h1>Instagrano Feed</h1>
         <button @click="logout">Logout</button>
         
+        <!-- Post Creation Form -->
+        <div style="border: 1px solid #ddd; padding: 15px; margin: 20px 0;">
+            <h3>Create New Post</h3>
+            <input x-model="newPost.title" placeholder="Post title" style="width: 100%; padding: 10px; margin: 5px 0;">
+            <input x-model="newPost.caption" placeholder="Caption" style="width: 100%; padding: 10px; margin: 5px 0;">
+            <select x-model="newPost.mediaType" style="width: 100%; padding: 10px; margin: 5px 0;">
+                <option value="image">Image</option>
+                <option value="video">Video</option>
+            </select>
+            <button @click="createPost" style="width: 100%; padding: 10px; background: #28a745; color: white; border: none;">Create Post</button>
+        </div>
+        
         <div class="loading" x-show="loading">Loading posts...</div>
         <div class="error" x-show="error" x-text="error"></div>
         
@@ -55,6 +67,11 @@
             error: '',
             commentingPostId: null,
             newComment: '',
+            newPost: {
+                title: '',
+                caption: '',
+                mediaType: 'image'
+            },
             
             async init() {
                 const token = localStorage.getItem('token');
@@ -63,6 +80,35 @@
                     return;
                 }
                 await this.loadFeed();
+            },
+            
+            async createPost() {
+                try {
+                    const token = localStorage.getItem('token');
+                    const response = await fetch('/api/posts', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            title: this.newPost.title,
+                            caption: this.newPost.caption,
+                            media_type: this.newPost.mediaType
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        this.newPost.title = '';
+                        this.newPost.caption = '';
+                        this.newPost.mediaType = 'image';
+                        await this.loadFeed(); // Reload to show new post
+                    } else {
+                        this.error = 'Failed to create post';
+                    }
+                } catch (e) {
+                    this.error = 'Failed to create post';
+                }
             },
             
             async loadFeed() {
