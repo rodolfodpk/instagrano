@@ -23,7 +23,7 @@ func main() {
     userRepo := postgres.NewUserRepository(db)
 
     // Initialize services
-    authService := service.NewAuthService(userRepo)
+    authService := service.NewAuthService(userRepo, cfg.JWTSecret)
 
     // Initialize handlers
     authHandler := handler.NewAuthHandler(authService)
@@ -40,6 +40,7 @@ func main() {
     // Routes
     api := app.Group("/api")
     api.Post("/auth/register", authHandler.Register)
+    api.Post("/auth/login", authHandler.Login)
 
     log.Printf("🚀 Server starting on port %s", cfg.Port)
     log.Fatal(app.Listen(":" + cfg.Port))

@@ -32,3 +32,22 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
     user.Password = ""
     return c.JSON(fiber.Map{"user": user})
 }
+
+func (h *AuthHandler) Login(c *fiber.Ctx) error {
+    var req struct {
+        Email    string `json:"email"`
+        Password string `json:"password"`
+    }
+
+    if err := c.BodyParser(&req); err != nil {
+        return c.Status(400).JSON(fiber.Map{"error": "invalid request"})
+    }
+
+    user, token, err := h.authService.Login(req.Email, req.Password)
+    if err != nil {
+        return c.Status(401).JSON(fiber.Map{"error": "invalid credentials"})
+    }
+
+    user.Password = ""
+    return c.JSON(fiber.Map{"user": user, "token": token})
+}
