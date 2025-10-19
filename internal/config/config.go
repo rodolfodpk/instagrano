@@ -10,7 +10,7 @@ type Config struct {
 
 func Load() *Config {
     return &Config{
-        DatabaseURL: getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/instagrano?sslmode=disable"),
+        DatabaseURL: getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5433/instagrano?sslmode=disable"),
         JWTSecret:   getEnv("JWT_SECRET", "dev-secret"),
         Port:        getEnv("PORT", "3000"),
     }
