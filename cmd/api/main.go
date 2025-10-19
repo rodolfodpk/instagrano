@@ -23,16 +23,19 @@ func main() {
     // Initialize repositories
     userRepo := postgres.NewUserRepository(db)
     postRepo := postgres.NewPostRepository(db)
+    likeRepo := postgres.NewLikeRepository(db)
 
     // Initialize services
     authService := service.NewAuthService(userRepo, cfg.JWTSecret)
     postService := service.NewPostService(postRepo)
     feedService := service.NewFeedService(postRepo)
+    interactionService := service.NewInteractionService(likeRepo)
 
     // Initialize handlers
     authHandler := handler.NewAuthHandler(authService)
     postHandler := handler.NewPostHandler(postService)
     feedHandler := handler.NewFeedHandler(feedService)
+    interactionHandler := handler.NewInteractionHandler(interactionService)
 
     app := fiber.New()
 
@@ -56,6 +59,7 @@ func main() {
     })
     protected.Post("/posts", postHandler.CreatePost)
     protected.Get("/posts/:id", postHandler.GetPost)
+    protected.Post("/posts/:id/like", interactionHandler.LikePost)
     protected.Get("/feed", feedHandler.GetFeed)
 
     log.Printf("🚀 Server starting on port %s", cfg.Port)
