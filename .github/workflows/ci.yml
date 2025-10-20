@@ -21,11 +21,3 @@ jobs:
     - run: make test-full
       env:
         TESTCONTAINERS_RYUK_DISABLED: true
-  deploy:
-    if: github.ref == 'refs/heads/main'
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-    - uses: dyc3/railway-deploy@master
-      env:
-        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
