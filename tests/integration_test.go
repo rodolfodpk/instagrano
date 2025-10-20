@@ -4,322 +4,265 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"mime/multipart"
-	"net/http"
-	"os"
-	"strings"
+	"net/http/httptest"
 	"testing"
-	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	. "github.com/onsi/gomega"
 )
 
-const (
-	baseURL      = "http://localhost:3007"
-	testPassword = "testpassword123"
-)
+func TestUserRegistrationAndLogin(t *testing.T) {
+	RegisterTestingT(t)
 
-// Generate unique test email for each test run
-func getTestEmail() string {
-	return fmt.Sprintf("test-%d@example.com", time.Now().Unix())
+	// Setup: Testcontainers start automatically!
+	app, _, cleanup := setupTestApp(t)
+	defer cleanup()
+
+	// Given: Registration data
+	regData := map[string]string{
+		"username": "testuser",
+		"email":    "test@example.com",
+		"password": "password123",
+	}
+	regBody, _ := json.Marshal(regData)
+
+	// When: User registers
+	regReq := httptest.NewRequest("POST", "/api/auth/register", bytes.NewReader(regBody))
+	regReq.Header.Set("Content-Type", "application/json")
+	regResp, err := app.Test(regReq)
+
+	// Then: Registration succeeds
+	Expect(err).NotTo(HaveOccurred())
+	Expect(regResp.StatusCode).To(Equal(200))
+
+	// When: User logs in
+	loginData := map[string]string{
+		"email":    "test@example.com",
+		"password": "password123",
+	}
+	loginBody, _ := json.Marshal(loginData)
+	loginReq := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginResp, err := app.Test(loginReq)
+
+	// Then: Login succeeds and returns JWT
+	Expect(err).NotTo(HaveOccurred())
+	Expect(loginResp.StatusCode).To(Equal(200))
+
+	var loginResult map[string]interface{}
+	json.NewDecoder(loginResp.Body).Decode(&loginResult)
+	Expect(loginResult).To(HaveKey("token"))
+	Expect(loginResult["token"]).NotTo(BeEmpty())
 }
 
-type LoginResponse struct {
-	Token string `json:"token"`
-	User  struct {
-		ID       uint   `json:"id"`
-		Username string `json:"username"`
-		Email    string `json:"email"`
-	} `json:"user"`
+func TestFeedEndpoint(t *testing.T) {
+	RegisterTestingT(t)
+
+	app, _, cleanup := setupTestApp(t)
+	defer cleanup()
+
+	// Given: User is registered and logged in
+	token := registerAndLogin(t, app, "feeduser", "feed@example.com", "pass123")
+
+	// When: Request feed
+	feedReq := httptest.NewRequest("GET", "/api/feed", nil)
+	feedReq.Header.Set("Authorization", "Bearer "+token)
+	feedResp, err := app.Test(feedReq)
+
+	// Then: Feed is returned
+	Expect(err).NotTo(HaveOccurred())
+	Expect(feedResp.StatusCode).To(Equal(200))
+
+	var feedResult map[string]interface{}
+	json.NewDecoder(feedResp.Body).Decode(&feedResult)
+	Expect(feedResult).To(HaveKey("posts"))
 }
 
-type PostResponse struct {
-	ID            uint    `json:"id"`
-	UserID        uint    `json:"user_id"`
-	Title         string  `json:"title"`
-	Caption       string  `json:"caption"`
-	MediaType     string  `json:"media_type"`
-	MediaURL      string  `json:"media_url"`
-	LikesCount    int     `json:"likes_count"`
-	CommentsCount int     `json:"comments_count"`
-	ViewsCount    int     `json:"views_count"`
-	Score         float64 `json:"score"`
-	CreatedAt     string  `json:"created_at"`
-	UpdatedAt     string  `json:"updated_at"`
+func TestJWTTokenValidation(t *testing.T) {
+	RegisterTestingT(t)
+
+	app, _, cleanup := setupTestApp(t)
+	defer cleanup()
+
+	// Given: Invalid token
+	invalidReq := httptest.NewRequest("GET", "/api/feed", nil)
+	invalidReq.Header.Set("Authorization", "Bearer invalid-token")
+	invalidResp, err := app.Test(invalidReq)
+
+	// Then: Should return 401
+	Expect(err).NotTo(HaveOccurred())
+	Expect(invalidResp.StatusCode).To(Equal(401))
+
+	// Given: Malformed Authorization header
+	malformedReq := httptest.NewRequest("GET", "/api/feed", nil)
+	malformedReq.Header.Set("Authorization", "InvalidFormat token")
+	malformedResp, err := app.Test(malformedReq)
+
+	// Then: Should return 401
+	Expect(err).NotTo(HaveOccurred())
+	Expect(malformedResp.StatusCode).To(Equal(401))
+
+	// Given: Missing Authorization header
+	missingReq := httptest.NewRequest("GET", "/api/feed", nil)
+	missingResp, err := app.Test(missingReq)
+
+	// Then: Should return 401
+	Expect(err).NotTo(HaveOccurred())
+	Expect(missingResp.StatusCode).To(Equal(401))
 }
 
-type FeedResponse struct {
-	Posts []PostResponse `json:"posts"`
-	Page  int            `json:"page"`
-	Limit int            `json:"limit"`
+func TestPostCreation(t *testing.T) {
+	RegisterTestingT(t)
+
+	app, _, cleanup := setupTestApp(t)
+	defer cleanup()
+
+	// Given: User is registered and logged in
+	token := registerAndLogin(t, app, "postuser", "post@example.com", "pass123")
+
+	// Given: Post data as multipart form
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	
+	// Add form fields
+	writer.WriteField("title", "Test Post")
+	writer.WriteField("caption", "This is a test post")
+	writer.WriteField("media_type", "image")
+	
+	// Add file
+	fileWriter, err := writer.CreateFormFile("media", "test.jpg")
+	Expect(err).NotTo(HaveOccurred())
+	
+	_, err = fileWriter.Write([]byte("fake image content"))
+	Expect(err).NotTo(HaveOccurred())
+	
+	err = writer.Close()
+	Expect(err).NotTo(HaveOccurred())
+
+	// When: Create post
+	postReq := httptest.NewRequest("POST", "/api/posts", &buf)
+	postReq.Header.Set("Content-Type", writer.FormDataContentType())
+	postReq.Header.Set("Authorization", "Bearer "+token)
+	postResp, err := app.Test(postReq)
+
+	// Then: Post creation succeeds
+	Expect(err).NotTo(HaveOccurred())
+	Expect(postResp.StatusCode).To(Equal(201))
+
+	var postResult map[string]interface{}
+	json.NewDecoder(postResp.Body).Decode(&postResult)
+	Expect(postResult).To(HaveKey("id"))
+	Expect(postResult["title"]).To(Equal("Test Post"))
+	Expect(postResult["caption"]).To(Equal("This is a test post"))
 }
 
-func TestJWTIntegration(t *testing.T) {
-	// Check if server is running
-	if !isServerRunning() {
-		t.Skip("Server is not running. Please start the server with: JWT_SECRET='super-secret-key-for-testing' PORT=3007 go run cmd/api/main.go")
-	}
+func TestLikePost(t *testing.T) {
+	RegisterTestingT(t)
 
-	t.Run("User Registration and Login", func(t *testing.T) {
-		testEmail := getTestEmail()
+	app, _, cleanup := setupTestApp(t)
+	defer cleanup()
 
-		// Register a new user
-		registerData := map[string]string{
-			"username": fmt.Sprintf("testuser-%d", time.Now().Unix()),
-			"email":    testEmail,
-			"password": testPassword,
-		}
+	// Given: User is registered and logged in
+	token := registerAndLogin(t, app, "likeuser", "like@example.com", "pass123")
 
-		registerResp, registerBody := makeRequestWithError(t, "POST", "/api/auth/register", registerData, "")
-		if registerResp.StatusCode != 200 && registerResp.StatusCode != 201 {
-			t.Logf("Registration failed with status %d: %s", registerResp.StatusCode, registerBody)
-			// If user already exists, that's okay for this test
-			if strings.Contains(registerBody, "duplicate key") {
-				t.Log("User already exists, continuing with login test")
-			} else {
-				assert.True(t, registerResp.StatusCode == 200 || registerResp.StatusCode == 201, "User registration should succeed with status 200 or 201")
-			}
-		} else {
-			assert.True(t, registerResp.StatusCode == 200 || registerResp.StatusCode == 201, "User registration should succeed with status 200 or 201")
-		}
+	// Given: A post exists (we'll create one)
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	
+	writer.WriteField("title", "Post to Like")
+	writer.WriteField("caption", "This post will be liked")
+	writer.WriteField("media_type", "image")
+	
+	fileWriter, err := writer.CreateFormFile("media", "test.jpg")
+	Expect(err).NotTo(HaveOccurred())
+	
+	_, err = fileWriter.Write([]byte("fake image content"))
+	Expect(err).NotTo(HaveOccurred())
+	
+	err = writer.Close()
+	Expect(err).NotTo(HaveOccurred())
 
-		// Login with the registered user
-		loginData := map[string]string{
-			"email":    testEmail,
-			"password": testPassword,
-		}
+	postReq := httptest.NewRequest("POST", "/api/posts", &buf)
+	postReq.Header.Set("Content-Type", writer.FormDataContentType())
+	postReq.Header.Set("Authorization", "Bearer "+token)
+	postResp, err := app.Test(postReq)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(postResp.StatusCode).To(Equal(201))
 
-		loginResp, loginBody := makeRequestWithError(t, "POST", "/api/auth/login", loginData, "")
-		if loginResp.StatusCode != 200 {
-			t.Logf("Login failed with status %d: %s", loginResp.StatusCode, loginBody)
-		}
-		assert.Equal(t, 200, loginResp.StatusCode, "Login should succeed")
+	var postResult map[string]interface{}
+	json.NewDecoder(postResp.Body).Decode(&postResult)
+	postID := fmt.Sprintf("%.0f", postResult["id"].(float64))
 
-		var loginResponse LoginResponse
-		err := json.NewDecoder(loginResp.Body).Decode(&loginResponse)
-		require.NoError(t, err, "Should be able to decode login response")
+	// When: Like the post
+	likeReq := httptest.NewRequest("POST", "/api/posts/"+postID+"/like", nil)
+	likeReq.Header.Set("Authorization", "Bearer "+token)
+	likeResp, err := app.Test(likeReq)
 
-		assert.NotEmpty(t, loginResponse.Token, "Token should not be empty")
-		assert.Equal(t, testEmail, loginResponse.User.Email, "User email should match")
+	// Then: Like succeeds
+	Expect(err).NotTo(HaveOccurred())
+	Expect(likeResp.StatusCode).To(Equal(200))
 
-		// Test JWT authentication with /me endpoint
-		meResp := makeRequest(t, "GET", "/api/me", nil, loginResponse.Token)
-		assert.Equal(t, 200, meResp.StatusCode, "JWT authentication should work")
-
-		var meResponse map[string]interface{}
-		err = json.NewDecoder(meResp.Body).Decode(&meResponse)
-		require.NoError(t, err, "Should be able to decode /me response")
-
-		assert.Equal(t, float64(loginResponse.User.ID), meResponse["user_id"], "User ID should match")
-	})
-
-	t.Run("File Upload and Post Creation", func(t *testing.T) {
-		testEmail := getTestEmail()
-
-		// First login to get a token
-		loginData := map[string]string{
-			"email":    testEmail,
-			"password": testPassword,
-		}
-
-		loginResp := makeRequest(t, "POST", "/api/auth/login", loginData, "")
-		require.Equal(t, 200, loginResp.StatusCode, "Login should succeed")
-
-		var loginResponse LoginResponse
-		err := json.NewDecoder(loginResp.Body).Decode(&loginResponse)
-		require.NoError(t, err, "Should be able to decode login response")
-
-		// Create a test file
-		testFileContent := "This is a test file for upload"
-		testFileName := "test.txt"
-
-		// Create multipart form data
-		var buf bytes.Buffer
-		writer := multipart.NewWriter(&buf)
-
-		// Add form fields
-		writer.WriteField("title", "Integration Test Post")
-		writer.WriteField("caption", "This is a test post created by integration test")
-		writer.WriteField("media_type", "image")
-
-		// Add file
-		fileWriter, err := writer.CreateFormFile("media", testFileName)
-		require.NoError(t, err, "Should be able to create form file")
-
-		_, err = fileWriter.Write([]byte(testFileContent))
-		require.NoError(t, err, "Should be able to write file content")
-
-		err = writer.Close()
-		require.NoError(t, err, "Should be able to close writer")
-
-		// Make the request
-		req, err := http.NewRequest("POST", baseURL+"/api/posts", &buf)
-		require.NoError(t, err, "Should be able to create request")
-
-		req.Header.Set("Content-Type", writer.FormDataContentType())
-		req.Header.Set("Authorization", "Bearer "+loginResponse.Token)
-
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err := client.Do(req)
-		require.NoError(t, err, "Should be able to make request")
-		defer resp.Body.Close()
-
-		assert.Equal(t, 201, resp.StatusCode, "Post creation should succeed")
-
-		var postResponse PostResponse
-		err = json.NewDecoder(resp.Body).Decode(&postResponse)
-		require.NoError(t, err, "Should be able to decode post response")
-
-		assert.Equal(t, "Integration Test Post", postResponse.Title, "Post title should match")
-		assert.Equal(t, "This is a test post created by integration test", postResponse.Caption, "Post caption should match")
-		assert.Equal(t, "image", postResponse.MediaType, "Media type should match")
-		assert.NotEmpty(t, postResponse.MediaURL, "Media URL should not be empty")
-		assert.True(t, strings.HasPrefix(postResponse.MediaURL, "/uploads/"), "Media URL should start with /uploads/")
-	})
-
-	t.Run("Feed Access", func(t *testing.T) {
-		testEmail := getTestEmail()
-
-		// Login to get a token
-		loginData := map[string]string{
-			"email":    testEmail,
-			"password": testPassword,
-		}
-
-		loginResp := makeRequest(t, "POST", "/api/auth/login", loginData, "")
-		require.Equal(t, 200, loginResp.StatusCode, "Login should succeed")
-
-		var loginResponse LoginResponse
-		err := json.NewDecoder(loginResp.Body).Decode(&loginResponse)
-		require.NoError(t, err, "Should be able to decode login response")
-
-		// Access the feed
-		feedResp := makeRequest(t, "GET", "/api/feed", nil, loginResponse.Token)
-		assert.Equal(t, 200, feedResp.StatusCode, "Feed access should succeed")
-
-		var feedResponse FeedResponse
-		err = json.NewDecoder(feedResp.Body).Decode(&feedResponse)
-		require.NoError(t, err, "Should be able to decode feed response")
-
-		assert.GreaterOrEqual(t, len(feedResponse.Posts), 1, "Feed should contain at least one post")
-		assert.Equal(t, 1, feedResponse.Page, "Page should be 1")
-		assert.Equal(t, 20, feedResponse.Limit, "Limit should be 20")
-	})
-
-	t.Run("JWT Token Validation Edge Cases", func(t *testing.T) {
-		// Test with invalid token
-		invalidResp := makeRequest(t, "GET", "/api/me", nil, "invalid-token")
-		assert.Equal(t, 401, invalidResp.StatusCode, "Invalid token should return 401")
-
-		// Test with malformed Authorization header
-		req, err := http.NewRequest("GET", baseURL+"/api/me", nil)
-		require.NoError(t, err, "Should be able to create request")
-
-		req.Header.Set("Authorization", "InvalidFormat token")
-
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err := client.Do(req)
-		require.NoError(t, err, "Should be able to make request")
-		defer resp.Body.Close()
-
-		assert.Equal(t, 401, resp.StatusCode, "Malformed Authorization header should return 401")
-
-		// Test with missing Authorization header
-		req, err = http.NewRequest("GET", baseURL+"/api/me", nil)
-		require.NoError(t, err, "Should be able to create request")
-
-		resp, err = client.Do(req)
-		require.NoError(t, err, "Should be able to make request")
-		defer resp.Body.Close()
-
-		assert.Equal(t, 401, resp.StatusCode, "Missing Authorization header should return 401")
-	})
+	var likeResult map[string]interface{}
+	json.NewDecoder(likeResp.Body).Decode(&likeResult)
+	Expect(likeResult).To(HaveKey("message"))
+	Expect(likeResult["message"]).To(Equal("post liked"))
 }
 
-func makeRequest(t *testing.T, method, path string, data interface{}, token string) *http.Response {
-	var body io.Reader
+func TestCommentPost(t *testing.T) {
+	RegisterTestingT(t)
 
-	if data != nil {
-		jsonData, err := json.Marshal(data)
-		require.NoError(t, err, "Should be able to marshal data")
-		body = bytes.NewBuffer(jsonData)
+	app, _, cleanup := setupTestApp(t)
+	defer cleanup()
+
+	// Given: User is registered and logged in
+	token := registerAndLogin(t, app, "commentuser", "comment@example.com", "pass123")
+
+	// Given: A post exists
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	
+	writer.WriteField("title", "Post to Comment")
+	writer.WriteField("caption", "This post will be commented on")
+	writer.WriteField("media_type", "image")
+	
+	fileWriter, err := writer.CreateFormFile("media", "test.jpg")
+	Expect(err).NotTo(HaveOccurred())
+	
+	_, err = fileWriter.Write([]byte("fake image content"))
+	Expect(err).NotTo(HaveOccurred())
+	
+	err = writer.Close()
+	Expect(err).NotTo(HaveOccurred())
+
+	postReq := httptest.NewRequest("POST", "/api/posts", &buf)
+	postReq.Header.Set("Content-Type", writer.FormDataContentType())
+	postReq.Header.Set("Authorization", "Bearer "+token)
+	postResp, err := app.Test(postReq)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(postResp.StatusCode).To(Equal(201))
+
+	var postResult map[string]interface{}
+	json.NewDecoder(postResp.Body).Decode(&postResult)
+	postID := fmt.Sprintf("%.0f", postResult["id"].(float64))
+
+	// Given: Comment data
+	commentData := map[string]string{
+		"content": "This is a test comment",
 	}
+	commentBody, _ := json.Marshal(commentData)
 
-	req, err := http.NewRequest(method, baseURL+path, body)
-	require.NoError(t, err, "Should be able to create request")
+	// When: Comment on the post
+	commentReq := httptest.NewRequest("POST", "/api/posts/"+postID+"/comment", bytes.NewReader(commentBody))
+	commentReq.Header.Set("Content-Type", "application/json")
+	commentReq.Header.Set("Authorization", "Bearer "+token)
+	commentResp, err := app.Test(commentReq)
 
-	if data != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
+	// Then: Comment succeeds
+	Expect(err).NotTo(HaveOccurred())
+	Expect(commentResp.StatusCode).To(Equal(200))
 
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	require.NoError(t, err, "Should be able to make request")
-
-	return resp
-}
-
-func makeRequestWithError(t *testing.T, method, path string, data interface{}, token string) (*http.Response, string) {
-	var body io.Reader
-
-	if data != nil {
-		jsonData, err := json.Marshal(data)
-		require.NoError(t, err, "Should be able to marshal data")
-		body = bytes.NewBuffer(jsonData)
-	}
-
-	req, err := http.NewRequest(method, baseURL+path, body)
-	require.NoError(t, err, "Should be able to create request")
-
-	if data != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	require.NoError(t, err, "Should be able to make request")
-
-	// Read response body for error messages
-	bodyBytes, err := io.ReadAll(resp.Body)
-	require.NoError(t, err, "Should be able to read response body")
-
-	// Create a new response with the body for further use
-	resp.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-
-	return resp, string(bodyBytes)
-}
-
-func isServerRunning() bool {
-	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get(baseURL + "/health")
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-	return resp.StatusCode == 200
-}
-
-func TestMain(m *testing.M) {
-	// Check if server is running before running tests
-	if !isServerRunning() {
-		fmt.Println("⚠️  Server is not running!")
-		fmt.Println("Please start the server with:")
-		fmt.Println("JWT_SECRET='super-secret-key-for-testing' PORT=3007 go run cmd/api/main.go")
-		fmt.Println("Then run the tests again.")
-		os.Exit(1)
-	}
-
-	// Run tests
-	code := m.Run()
-	os.Exit(code)
+	var commentResult map[string]interface{}
+	json.NewDecoder(commentResp.Body).Decode(&commentResult)
+	Expect(commentResult).To(HaveKey("message"))
+	Expect(commentResult["message"]).To(Equal("comment added"))
 }

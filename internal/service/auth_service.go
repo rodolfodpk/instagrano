@@ -3,7 +3,7 @@ package service
 import (
     "errors"
     "time"
-    "github.com/golang-jwt/jwt/v4"
+    "github.com/golang-jwt/jwt/v5"
     "github.com/rodolfodpk/instagrano/internal/domain"
     "github.com/rodolfodpk/instagrano/internal/repository/postgres"
     "golang.org/x/crypto/bcrypt"

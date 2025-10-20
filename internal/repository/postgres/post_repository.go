@@ -44,6 +44,9 @@ func (r *postgresPostRepository) FindByID(id uint) (*domain.Post, error) {
 		&post.MediaURL, &post.LikesCount, &post.CommentsCount, &post.ViewsCount,
 		&post.CreatedAt, &post.UpdatedAt,
 	)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("post with id %d not found", id)
+	}
 	return post, err
 }
 
