@@ -40,8 +40,14 @@
             content.innerHTML = '<div class="loading">Loading buckets...</div>';
             
             try {
-                // List all buckets
-                const response = await fetch(`${LOCALSTACK_ENDPOINT}/`);
+                // List all buckets with proper headers
+                const response = await fetch(`${LOCALSTACK_ENDPOINT}/`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': 'AWS test:test',
+                        'x-amz-content-sha256': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+                    }
+                });
                 const text = await response.text();
                 
                 if (response.ok) {
@@ -81,7 +87,13 @@
             const filesDiv = document.getElementById(`files-${bucketName}`);
             
             try {
-                const response = await fetch(`${LOCALSTACK_ENDPOINT}/${bucketName}/`);
+                const response = await fetch(`${LOCALSTACK_ENDPOINT}/${bucketName}/`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': 'AWS test:test',
+                        'x-amz-content-sha256': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+                    }
+                });
                 const text = await response.text();
                 
                 if (response.ok) {
