@@ -99,7 +99,7 @@
                     formData.append('media_type', this.newPost.mediaType);
                     formData.append('media', fileInput.files[0]);
                     
-                    const response = await fetch('/api/posts', {
+                    const response = await fetch('http://localhost:3007/api/posts', {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${token}`
@@ -125,7 +125,7 @@
                 try {
                     this.loading = true;
                     const token = localStorage.getItem('token');
-                    const response = await fetch('/api/feed', {
+                        const response = await fetch('http://localhost:3007/api/feed', {
                         headers: {'Authorization': `Bearer ${token}`}
                     });
                     
@@ -145,7 +145,7 @@
             async likePost(postId) {
                 try {
                     const token = localStorage.getItem('token');
-                    const response = await fetch(`/api/posts/${postId}/like`, {
+                        const response = await fetch(`http://localhost:3007/api/posts/${postId}/like`, {
                         method: 'POST',
                         headers: {'Authorization': `Bearer ${token}`}
                     });
@@ -166,7 +166,7 @@
             async addComment(postId) {
                 try {
                     const token = localStorage.getItem('token');
-                    const response = await fetch(`/api/posts/${postId}/comment`, {
+                        const response = await fetch(`http://localhost:3007/api/posts/${postId}/comment`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${token}`,
