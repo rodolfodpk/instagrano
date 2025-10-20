@@ -1,70 +1,61 @@
 package service
 
 import (
-    "fmt"
-    "io"
-    "os"
-    "path/filepath"
-    "time"
-    "github.com/rodolfodpk/instagrano/internal/domain"
-    "github.com/rodolfodpk/instagrano/internal/repository/postgres"
+	"fmt"
+	"io"
+
+	"github.com/rodolfodpk/instagrano/internal/domain"
+	"github.com/rodolfodpk/instagrano/internal/repository/postgres"
+	"github.com/rodolfodpk/instagrano/internal/repository/s3"
 )
 
 type PostService struct {
-    postRepo postgres.PostRepository
+	postRepo     postgres.PostRepository
+	mediaStorage s3.MediaStorage
 }
 
-func NewPostService(postRepo postgres.PostRepository) *PostService {
-    return &PostService{postRepo: postRepo}
+func NewPostService(postRepo postgres.PostRepository, mediaStorage s3.MediaStorage) *PostService {
+	return &PostService{
+		postRepo:     postRepo,
+		mediaStorage: mediaStorage,
+	}
 }
 
 func (s *PostService) CreatePost(userID uint, title, caption string, mediaType domain.MediaType, file io.Reader, filename string) (*domain.Post, error) {
-    if title == "" {
-        return nil, ErrInvalidInput
-    }
+	if title == "" {
+		return nil, ErrInvalidInput
+	}
 
-    // Create uploads directory if it doesn't exist
-    uploadDir := "web/public/uploads"
-    os.MkdirAll(uploadDir, 0755)
+	// Determine content type based on media type
+	contentType := "image/jpeg"
+	if mediaType == domain.MediaTypeVideo {
+		contentType = "video/mp4"
+	}
 
-    // Generate unique filename
-    ext := filepath.Ext(filename)
-    if ext == "" {
-        ext = ".jpg" // default extension
-    }
-    uniqueFilename := fmt.Sprintf("%d-%d%s", userID, time.Now().Unix(), ext)
-    filePath := filepath.Join(uploadDir, uniqueFilename)
+	// Upload file to S3
+	key, err := s.mediaStorage.Upload(file, filename, contentType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upload file to S3: %w", err)
+	}
 
-    // Save file locally
-    destFile, err := os.Create(filePath)
-    if err != nil {
-        return nil, fmt.Errorf("failed to create file: %w", err)
-    }
-    defer destFile.Close()
+	// Generate URL from S3 key
+	mediaURL := s.mediaStorage.GetURL(key)
 
-    _, err = io.Copy(destFile, file)
-    if err != nil {
-        return nil, fmt.Errorf("failed to save file: %w", err)
-    }
+	post := &domain.Post{
+		UserID:    userID,
+		Title:     title,
+		Caption:   caption,
+		MediaType: mediaType,
+		MediaURL:  mediaURL,
+	}
 
-    // Generate URL
-    mediaURL := fmt.Sprintf("/uploads/%s", uniqueFilename)
+	if err := s.postRepo.Create(post); err != nil {
+		return nil, err
+	}
 
-    post := &domain.Post{
-        UserID:    userID,
-        Title:     title,
-        Caption:   caption,
-        MediaType: mediaType,
-        MediaURL:  mediaURL,
-    }
-
-    if err := s.postRepo.Create(post); err != nil {
-        return nil, err
-    }
-
-    return post, nil
+	return post, nil
 }
 
 func (s *PostService) GetPost(postID uint) (*domain.Post, error) {
-    return s.postRepo.FindByID(postID)
+	return s.postRepo.FindByID(postID)
 }

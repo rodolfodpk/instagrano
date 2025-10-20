@@ -2,38 +2,79 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Instagrano - Login</title>
+    <title>Instagrano - Login & Register</title>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>
         body { font-family: Arial; max-width: 400px; margin: 50px auto; }
-        input { width: 100%; padding: 10px; margin: 10px 0; }
-        button { width: 100%; padding: 10px; background: #007bff; color: white; border: none; cursor: pointer; }
+        input { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background: #007bff; color: white; border: none; cursor: pointer; margin: 5px 0; }
+        button.secondary { background: #6c757d; }
         .error { color: red; }
+        .success { color: green; }
+        .tabs { display: flex; margin-bottom: 20px; }
+        .tab { flex: 1; padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; cursor: pointer; text-align: center; }
+        .tab.active { background: #007bff; color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
     </style>
 </head>
 <body>
-    <div x-data="loginForm()">
-        <h1>Instagrano Login</h1>
-        <form @submit.prevent="login">
-            <input x-model="email" type="email" placeholder="Email" required>
-            <input x-model="password" type="password" placeholder="Password" required>
-            <button type="submit">Login</button>
-        </form>
+    <div x-data="authForm()">
+        <h1>Instagrano</h1>
+        
+        <div class="tabs">
+            <div class="tab" :class="{active: activeTab === 'login'}" @click="activeTab = 'login'">Login</div>
+            <div class="tab" :class="{active: activeTab === 'register'}" @click="activeTab = 'register'">Register</div>
+        </div>
+        
+        <!-- Login Form -->
+        <div class="tab-content" :class="{active: activeTab === 'login'}">
+            <form @submit.prevent="login">
+                <input x-model="loginData.email" type="email" placeholder="Email" required>
+                <input x-model="loginData.password" type="password" placeholder="Password" required>
+                <button type="submit">Login</button>
+            </form>
+        </div>
+        
+        <!-- Register Form -->
+        <div class="tab-content" :class="{active: activeTab === 'register'}">
+            <form @submit.prevent="register">
+                <input x-model="registerData.username" type="text" placeholder="Username" required>
+                <input x-model="registerData.email" type="email" placeholder="Email" required>
+                <input x-model="registerData.password" type="password" placeholder="Password" required>
+                <button type="submit">Register</button>
+            </form>
+        </div>
+        
         <p class="error" x-show="error" x-text="error"></p>
+        <p class="success" x-show="success" x-text="success"></p>
     </div>
     
     <script>
-    function loginForm() {
+    function authForm() {
         return {
-            email: '',
-            password: '',
+            activeTab: 'login',
+            loginData: {
+                email: '',
+                password: ''
+            },
+            registerData: {
+                username: '',
+                email: '',
+                password: ''
+            },
             error: '',
+            success: '',
+            
             async login() {
                 try {
+                    this.error = '';
+                    this.success = '';
+                    
                     const response = await fetch('http://localhost:3007/api/auth/login', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({email: this.email, password: this.password})
+                        body: JSON.stringify(this.loginData)
                     });
                     
                     if (response.ok) {
@@ -45,6 +86,32 @@
                     }
                 } catch (e) {
                     this.error = 'Login failed';
+                }
+            },
+            
+            async register() {
+                try {
+                    this.error = '';
+                    this.success = '';
+                    
+                    const response = await fetch('http://localhost:3007/api/auth/register', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(this.registerData)
+                    });
+                    
+                    if (response.ok) {
+                        this.success = 'Registration successful! Please login.';
+                        this.activeTab = 'login';
+                        // Pre-fill login form with registered email
+                        this.loginData.email = this.registerData.email;
+                        this.loginData.password = '';
+                    } else {
+                        const errorData = await response.json();
+                        this.error = errorData.error || 'Registration failed';
+                    }
+                } catch (e) {
+                    this.error = 'Registration failed';
                 }
             }
         }

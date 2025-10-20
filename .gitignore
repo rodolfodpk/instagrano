@@ -54,3 +54,10 @@ main
 # Temporary files
 *.tmp
 *.temp
+
+# Uploaded files (local storage - now using S3)
+web/public/uploads/
+uploads/
+
+# MinIO client binary
+minio

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalStack S3 Browser</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { border-bottom: 2px solid #007bff; padding-bottom: 10px; margin-bottom: 20px; }
+        .bucket { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 15px; margin-bottom: 15px; }
+        .file { background: white; border: 1px solid #e9ecef; border-radius: 3px; padding: 10px; margin: 5px 0; display: flex; justify-content: space-between; align-items: center; }
+        .file-url { color: #007bff; text-decoration: none; }
+        .file-url:hover { text-decoration: underline; }
+        .refresh-btn { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-bottom: 20px; }
+        .refresh-btn:hover { background: #0056b3; }
+        .loading { text-align: center; color: #666; }
+        .error { color: #dc3545; background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; border-radius: 5px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🗂️ LocalStack S3 Browser</h1>
+            <p>Browse your S3 buckets and files stored in LocalStack</p>
+        </div>
+        
+        <button class="refresh-btn" onclick="loadBuckets()">🔄 Refresh Buckets</button>
+        
+        <div id="content">
+            <div class="loading">Loading buckets...</div>
+        </div>
+    </div>
+
+    <script>
+        const LOCALSTACK_ENDPOINT = 'http://localhost:4566';
+        
+        async function loadBuckets() {
+            const content = document.getElementById('content');
+            content.innerHTML = '<div class="loading">Loading buckets...</div>';
+            
+            try {
+                // List all buckets
+                const response = await fetch(`${LOCALSTACK_ENDPOINT}/`);
+                const text = await response.text();
+                
+                if (response.ok) {
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(text, 'text/xml');
+                    const buckets = xmlDoc.getElementsByTagName('Name');
+                    
+                    if (buckets.length === 0) {
+                        content.innerHTML = '<div class="error">No buckets found. Create a bucket first.</div>';
+                        return;
+                    }
+                    
+                    let html = '';
+                    for (let bucket of buckets) {
+                        const bucketName = bucket.textContent;
+                        html += `<div class="bucket">
+                            <h3>📁 ${bucketName}</h3>
+                            <div id="files-${bucketName}">Loading files...</div>
+                        </div>`;
+                    }
+                    
+                    content.innerHTML = html;
+                    
+                    // Load files for each bucket
+                    for (let bucket of buckets) {
+                        await loadBucketFiles(bucket.textContent);
+                    }
+                } else {
+                    content.innerHTML = `<div class="error">Failed to load buckets: ${response.status} ${response.statusText}</div>`;
+                }
+            } catch (error) {
+                content.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+        
+        async function loadBucketFiles(bucketName) {
+            const filesDiv = document.getElementById(`files-${bucketName}`);
+            
+            try {
+                const response = await fetch(`${LOCALSTACK_ENDPOINT}/${bucketName}/`);
+                const text = await response.text();
+                
+                if (response.ok) {
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(text, 'text/xml');
+                    const contents = xmlDoc.getElementsByTagName('Contents');
+                    
+                    if (contents.length === 0) {
+                        filesDiv.innerHTML = '<div style="color: #666; font-style: italic;">No files in this bucket</div>';
+                        return;
+                    }
+                    
+                    let html = '';
+                    for (let content of contents) {
+                        const key = content.getElementsByTagName('Key')[0].textContent;
+                        const size = content.getElementsByTagName('Size')[0].textContent;
+                        const lastModified = content.getElementsByTagName('LastModified')[0].textContent;
+                        const fileUrl = `${LOCALSTACK_ENDPOINT}/${bucketName}/${key}`;
+                        
+                        html += `<div class="file">
+                            <div>
+                                <strong>📄 ${key}</strong><br>
+                                <small>Size: ${size} bytes | Modified: ${new Date(lastModified).toLocaleString()}</small>
+                            </div>
+                            <div>
+                                <a href="${fileUrl}" target="_blank" class="file-url">🔗 Open File</a>
+                            </div>
+                        </div>`;
+                    }
+                    
+                    filesDiv.innerHTML = html;
+                } else {
+                    filesDiv.innerHTML = `<div class="error">Failed to load files: ${response.status}</div>`;
+                }
+            } catch (error) {
+                filesDiv.innerHTML = `<div class="error">Error loading files: ${error.message}</div>`;
+            }
+        }
+        
+        // Load buckets on page load
+        window.onload = loadBuckets;
+    </script>
+</body>
+</html>

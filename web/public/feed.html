@@ -39,7 +39,8 @@
         <div class="error" x-show="error" x-text="error"></div>
         
         <div x-show="posts.length > 0">
-            <div class="post" x-repeat="post in posts" :key="post.id">
+            <template x-for="post in posts" :key="post.id">
+                <div class="post">
                 <div class="post-header">Post #<span x-text="post.id"></span></div>
                 <div x-text="post.title"></div>
                 <div x-text="post.caption"></div>
@@ -56,7 +57,8 @@
                     <input x-model="newComment" placeholder="Add a comment...">
                     <button @click="addComment(post.id)">Post</button>
                 </div>
-            </div>
+                </div>
+            </template>
         </div>
     </div>
     
@@ -86,6 +88,7 @@
             async createPost() {
                 try {
                     const token = localStorage.getItem('token');
+                    console.log('Using token:', token ? token.substring(0, 20) + '...' : 'No token');
                     const fileInput = this.$refs.fileInput;
                     
                     if (!fileInput.files[0]) {
@@ -107,6 +110,10 @@
                         body: formData
                     });
                     
+                    console.log('Request headers:', {
+                        'Authorization': `Bearer ${token}`
+                    });
+                    
                     if (response.ok) {
                         this.newPost.title = '';
                         this.newPost.caption = '';
@@ -114,10 +121,13 @@
                         fileInput.value = '';
                         await this.loadFeed(); // Reload to show new post
                     } else {
-                        this.error = 'Failed to create post';
+                        const errorData = await response.json();
+                        this.error = `Failed to create post: ${errorData.error || 'Unknown error'}`;
+                        console.error('Post creation failed:', errorData);
                     }
                 } catch (e) {
-                    this.error = 'Failed to create post';
+                    this.error = `Failed to create post: ${e.message}`;
+                    console.error('Post creation error:', e);
                 }
             },
             
@@ -125,9 +135,13 @@
                 try {
                     this.loading = true;
                     const token = localStorage.getItem('token');
-                        const response = await fetch('http://localhost:3007/api/feed', {
+                    console.log('LoadFeed token:', token ? token.substring(0, 20) + '...' : 'No token');
+                    
+                    const response = await fetch('http://localhost:3007/api/feed', {
                         headers: {'Authorization': `Bearer ${token}`}
                     });
+                    
+                    console.log('LoadFeed response status:', response.status);
                     
                     if (response.ok) {
                         const data = await response.json();

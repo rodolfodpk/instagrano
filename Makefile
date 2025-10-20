@@ -1,4 +1,8 @@
-.PHONY: run test docker-up docker-down migrate clean
+.PHONY: run test docker-up docker-down migrate clean stop start restart itest health
+
+# Defaults (can be overridden)
+PORT ?= 3007
+JWT_SECRET ?= super-secret-key-for-testing
 
 run:
 	go run cmd/api/main.go
@@ -22,3 +26,28 @@ clean:
 	docker-compose down --volumes
 	rm -f instagrano
 	go clean
+
+# Kill any server bound to $(PORT)
+stop:
+	@if lsof -ti:$(PORT) >/dev/null; then \
+		echo "Stopping server on :$(PORT)..."; \
+		lsof -ti:$(PORT) | xargs kill -9; \
+	else \
+		echo "No server listening on :$(PORT)"; \
+	fi
+
+# Start server with env vars, after ensuring port is free and services are running
+start: stop docker-up
+	@echo "Starting server on :$(PORT) with JWT_SECRET set"
+	@JWT_SECRET='$(JWT_SECRET)' PORT=$(PORT) go run cmd/api/main.go
+
+# Convenience restart target
+restart: stop start
+
+# Quick health check
+health:
+	@curl -s http://localhost:$(PORT)/health || true
+
+# Run integration tests (expects server already running)
+itest:
+	@./run_integration_tests.sh
