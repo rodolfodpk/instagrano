@@ -96,9 +96,9 @@ func TestPostHandler_GetPostInvalidID(t *testing.T) {
 	req := httptest.NewRequest("GET", "/posts/invalid", nil)
 	resp, err := app.Test(req)
 
-	// Then: Should return 200 with default values (current behavior)
+	// Then: Should return 400 for invalid ID
 	Expect(err).NotTo(HaveOccurred())
-	Expect(resp.StatusCode).To(Equal(200))
+	Expect(resp.StatusCode).To(Equal(400))
 }
 
 func TestFeedHandler_GetFeedWithPage(t *testing.T) {

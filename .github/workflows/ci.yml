@@ -3,12 +3,24 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      docker:
+        image: docker:24-dind
+        options: --privileged
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-go@v5
       with: {go-version: '1.23.x'}
+    - name: Install Docker Compose
+      run: |
+        sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        sudo chmod +x /usr/local/bin/docker-compose
+    - name: Start Docker daemon
+      run: sudo systemctl start docker
     - run: go mod download
     - run: make test-full
+      env:
+        TESTCONTAINERS_RYUK_DISABLED: true
   deploy:
     if: github.ref == 'refs/heads/main'
     needs: test

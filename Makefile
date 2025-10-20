@@ -10,6 +10,10 @@ run:
 test:
 	go test -v -cover ./...
 
+test-full:
+	go test -race -coverprofile=coverage.out -covermode=atomic ./tests/ -coverpkg=./...
+	go tool cover -func=coverage.out | tail -1
+
 docker-up:
 	docker-compose up -d
 
