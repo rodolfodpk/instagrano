@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/rodolfodpk/instagrano/internal/config"
 	"github.com/rodolfodpk/instagrano/internal/service"
 	"go.uber.org/zap"
 )
@@ -11,32 +12,29 @@ import (
 type FeedHandler struct {
 	feedService *service.FeedService
 	logger      *zap.Logger
+	config      *config.Config
 }
 
-func NewFeedHandler(feedService *service.FeedService) *FeedHandler {
+func NewFeedHandler(feedService *service.FeedService, cfg *config.Config) *FeedHandler {
 	logger, _ := zap.NewProduction()
 	return &FeedHandler{
 		feedService: feedService,
 		logger:      logger,
+		config:      cfg,
 	}
 }
 
 func (h *FeedHandler) GetFeed(c *fiber.Ctx) error {
-	// Check if cursor-based pagination is requested
+	// Always use cursor-based pagination (more efficient)
 	cursor := c.Query("cursor")
-	if cursor != "" {
-		return h.getFeedWithCursor(c, cursor)
-	}
-
-	// Fallback to page-based pagination for backward compatibility
-	return h.getFeedWithPage(c)
+	return h.getFeedWithCursor(c, cursor)
 }
 
 func (h *FeedHandler) getFeedWithCursor(c *fiber.Ctx, cursor string) error {
-	limitStr := c.Query("limit", "20")
+	limitStr := c.Query("limit", strconv.Itoa(h.config.DefaultPageSize))
 	limit, err := strconv.Atoi(limitStr)
-	if err != nil || limit <= 0 || limit > 100 {
-		limit = 20
+	if err != nil || limit <= 0 || limit > h.config.MaxPageSize {
+		limit = h.config.DefaultPageSize
 	}
 
 	h.logger.Info("getting feed with cursor",
@@ -61,7 +59,11 @@ func (h *FeedHandler) getFeedWithCursor(c *fiber.Ctx, cursor string) error {
 
 func (h *FeedHandler) getFeedWithPage(c *fiber.Ctx) error {
 	page := c.QueryInt("page", 1)
-	limit := c.QueryInt("limit", 20)
+	limitStr := c.Query("limit", strconv.Itoa(h.config.DefaultPageSize))
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 || limit > h.config.MaxPageSize {
+		limit = h.config.DefaultPageSize
+	}
 
 	h.logger.Info("getting feed with page",
 		zap.Int("page", page),

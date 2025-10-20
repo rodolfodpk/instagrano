@@ -2,7 +2,7 @@ package service
 
 import (
 	"sort"
-	
+
 	"github.com/rodolfodpk/instagrano/internal/domain"
 	"github.com/rodolfodpk/instagrano/internal/pagination"
 	"github.com/rodolfodpk/instagrano/internal/repository/postgres"

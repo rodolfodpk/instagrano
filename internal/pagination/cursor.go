@@ -54,7 +54,7 @@ func DecodeCursor(cursorStr string) (*Cursor, error) {
 
 // FeedResult represents the result of a feed query with pagination
 type FeedResult struct {
-	Posts     []interface{} `json:"posts"`
-	NextCursor string       `json:"next_cursor,omitempty"`
-	HasMore   bool          `json:"has_more"`
+	Posts      []interface{} `json:"posts"`
+	NextCursor string        `json:"next_cursor,omitempty"`
+	HasMore    bool          `json:"has_more"`
 }

@@ -28,7 +28,7 @@ type localStackS3Storage struct {
 func NewMediaStorage(endpoint, region, bucket string) (MediaStorage, error) {
 	logger, _ := zap.NewProduction()
 	defer logger.Sync()
-	
+
 	logger.Info("initializing s3 storage",
 		zap.String("endpoint", endpoint),
 		zap.String("region", region),

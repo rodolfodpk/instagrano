@@ -45,11 +45,14 @@ make itest
 
 ### Feed Pagination
 
-The feed endpoint supports both cursor-based and page-based pagination:
+The feed endpoint supports both cursor-based and page-based pagination with configurable page sizes:
 
 **Cursor-based (recommended):**
 ```bash
-# First page
+# First page with default size (20 posts)
+GET /api/feed
+
+# Custom page size
 GET /api/feed?limit=10
 
 # Next page using cursor from previous response
@@ -58,8 +61,17 @@ GET /api/feed?limit=10&cursor=MTc2MDk3MjI5OF8xNQ==
 
 **Page-based (legacy):**
 ```bash
-GET /api/feed?page=1&limit=10
+# Default page size
+GET /api/feed?page=1
+
+# Custom page size
+GET /api/feed?page=1&limit=50
 ```
+
+**Configuration:**
+- `DEFAULT_PAGE_SIZE`: Default posts per page (default: 20)
+- `MAX_PAGE_SIZE`: Maximum allowed page size (default: 100)
+- Frontend dropdown: 3, 5, 10, 20, 50 posts per page
 
 **Response format (cursor-based):**
 ```json

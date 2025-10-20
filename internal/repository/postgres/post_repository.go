@@ -3,7 +3,7 @@ package postgres
 import (
 	"database/sql"
 	"fmt"
-	
+
 	"github.com/rodolfodpk/instagrano/internal/domain"
 	"github.com/rodolfodpk/instagrano/internal/pagination"
 )

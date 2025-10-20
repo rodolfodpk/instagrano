@@ -13,7 +13,7 @@ type Logger struct {
 // New creates a new logger instance
 func New(level zap.AtomicLevel, format string) *Logger {
 	var config zap.Config
-	
+
 	if format == "console" {
 		config = zap.NewDevelopmentConfig()
 		config.Level = level

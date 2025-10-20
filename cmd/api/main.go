@@ -70,7 +70,7 @@ func main() {
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(authService)
 	postHandler := handler.NewPostHandler(postService)
-	feedHandler := handler.NewFeedHandler(feedService)
+	feedHandler := handler.NewFeedHandler(feedService, cfg)
 	interactionHandler := handler.NewInteractionHandler(interactionService)
 
 	app := fiber.New()
@@ -109,6 +109,6 @@ func main() {
 		zap.String("port", cfg.Port),
 		zap.String("environment", "development"),
 	)
-	
+
 	log.Fatal(app.Listen(":" + cfg.Port))
 }
