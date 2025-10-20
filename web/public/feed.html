@@ -59,6 +59,19 @@
                 </div>
                 </div>
             </template>
+            
+            <!-- Load More Button -->
+            <div x-show="hasMore" style="text-align: center; margin: 20px 0;">
+                <button @click="loadMore" :disabled="loadingMore" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px;">
+                    <span x-show="!loadingMore">Load More Posts</span>
+                    <span x-show="loadingMore">Loading...</span>
+                </button>
+            </div>
+            
+            <!-- No more posts message -->
+            <div x-show="!hasMore && posts.length > 0" style="text-align: center; margin: 20px 0; color: #666;">
+                No more posts to load
+            </div>
         </div>
     </div>
     
@@ -67,7 +80,10 @@
         return {
             posts: [],
             loading: true,
+            loadingMore: false,
             error: '',
+            hasMore: true,
+            nextCursor: '',
             commentingPostId: null,
             newComment: '',
             newPost: {
@@ -119,6 +135,10 @@
                         this.newPost.caption = '';
                         this.newPost.mediaType = 'image';
                         fileInput.value = '';
+                        // Reset pagination state and reload feed
+                        this.posts = [];
+                        this.nextCursor = '';
+                        this.hasMore = true;
                         await this.loadFeed(); // Reload to show new post
                     } else {
                         const errorData = await response.json();
@@ -137,7 +157,12 @@
                     const token = localStorage.getItem('token');
                     console.log('LoadFeed token:', token ? token.substring(0, 20) + '...' : 'No token');
                     
-                    const response = await fetch('http://localhost:3007/api/feed', {
+                    // Use cursor-based pagination
+                    const url = this.nextCursor 
+                        ? `http://localhost:3007/api/feed?limit=5&cursor=${this.nextCursor}`
+                        : 'http://localhost:3007/api/feed?limit=5';
+                    
+                    const response = await fetch(url, {
                         headers: {'Authorization': `Bearer ${token}`}
                     });
                     
@@ -145,7 +170,19 @@
                     
                     if (response.ok) {
                         const data = await response.json();
-                        this.posts = data.posts || [];
+                        
+                        // Check if this is cursor-based response
+                        if (data.has_more !== undefined) {
+                            // Cursor-based pagination
+                            this.posts = [...this.posts, ...(data.posts || [])];
+                            this.hasMore = data.has_more;
+                            this.nextCursor = data.next_cursor || '';
+                        } else {
+                            // Fallback to page-based pagination
+                            this.posts = data.posts || [];
+                            this.hasMore = false;
+                            this.nextCursor = '';
+                        }
                     } else {
                         this.error = 'Failed to load feed';
                     }
@@ -153,6 +190,33 @@
                     this.error = 'Network error';
                 } finally {
                     this.loading = false;
+                }
+            },
+            
+            async loadMore() {
+                if (!this.hasMore || this.loadingMore) return;
+                
+                try {
+                    this.loadingMore = true;
+                    const token = localStorage.getItem('token');
+                    
+                    const url = `http://localhost:3007/api/feed?limit=5&cursor=${this.nextCursor}`;
+                    const response = await fetch(url, {
+                        headers: {'Authorization': `Bearer ${token}`}
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.posts = [...this.posts, ...(data.posts || [])];
+                        this.hasMore = data.has_more;
+                        this.nextCursor = data.next_cursor || '';
+                    } else {
+                        this.error = 'Failed to load more posts';
+                    }
+                } catch (e) {
+                    this.error = 'Network error';
+                } finally {
+                    this.loadingMore = false;
                 }
             },
             

@@ -1,6 +1,9 @@
 package config
 
-import "os"
+import (
+	"os"
+	"go.uber.org/zap"
+)
 
 type Config struct {
 	DatabaseURL string
@@ -8,6 +11,8 @@ type Config struct {
 	S3Bucket    string
 	JWTSecret   string
 	Port        string
+	LogLevel    string
+	LogFormat   string
 }
 
 func Load() *Config {
@@ -17,6 +22,23 @@ func Load() *Config {
 		S3Bucket:    getEnv("S3_BUCKET", "instagrano-media"),
 		JWTSecret:   getEnv("JWT_SECRET", "dev-secret"),
 		Port:        getEnv("PORT", "3000"),
+		LogLevel:    getEnv("LOG_LEVEL", "info"),
+		LogFormat:   getEnv("LOG_FORMAT", "json"),
+	}
+}
+
+func (c *Config) GetZapLevel() zap.AtomicLevel {
+	switch c.LogLevel {
+	case "debug":
+		return zap.NewAtomicLevelAt(zap.DebugLevel)
+	case "info":
+		return zap.NewAtomicLevelAt(zap.InfoLevel)
+	case "warn":
+		return zap.NewAtomicLevelAt(zap.WarnLevel)
+	case "error":
+		return zap.NewAtomicLevelAt(zap.ErrorLevel)
+	default:
+		return zap.NewAtomicLevelAt(zap.InfoLevel)
 	}
 }
 

@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"go.uber.org/zap"
 )
 
 type MediaStorage interface {
@@ -22,10 +22,18 @@ type localStackS3Storage struct {
 	s3Client *s3.S3
 	bucket   string
 	endpoint string
+	logger   *zap.Logger
 }
 
 func NewMediaStorage(endpoint, region, bucket string) (MediaStorage, error) {
-	log.Printf("Initializing S3 with endpoint: %s, region: %s, bucket: %s", endpoint, region, bucket)
+	logger, _ := zap.NewProduction()
+	defer logger.Sync()
+	
+	logger.Info("initializing s3 storage",
+		zap.String("endpoint", endpoint),
+		zap.String("region", region),
+		zap.String("bucket", bucket),
+	)
 
 	sess, err := session.NewSession(&aws.Config{
 		Region:           aws.String(region),
@@ -34,29 +42,36 @@ func NewMediaStorage(endpoint, region, bucket string) (MediaStorage, error) {
 		S3ForcePathStyle: aws.Bool(true), // Important for LocalStack
 	})
 	if err != nil {
+		logger.Error("failed to create aws session", zap.Error(err))
 		return nil, fmt.Errorf("failed to create AWS session: %w", err)
 	}
 
 	client := s3.New(sess)
 
 	// Skip bucket existence check for now - just log and proceed
-	log.Printf("S3 client initialized for bucket: %s", bucket)
+	logger.Info("s3 client initialized", zap.String("bucket", bucket))
 
 	return &localStackS3Storage{
 		s3Client: client,
 		bucket:   bucket,
 		endpoint: endpoint,
+		logger:   logger,
 	}, nil
 }
 
 func (s *localStackS3Storage) Upload(file io.Reader, filename string, contentType string) (string, error) {
 	key := fmt.Sprintf("posts/%d-%s", time.Now().Unix(), filename)
-	log.Printf("Uploading file to S3: bucket=%s, key=%s, contentType=%s", s.bucket, key, contentType)
+	s.logger.Info("uploading file to s3",
+		zap.String("bucket", s.bucket),
+		zap.String("key", key),
+		zap.String("content_type", contentType),
+		zap.String("filename", filename),
+	)
 
 	// Read the file content into bytes
 	fileBytes, err := io.ReadAll(file)
 	if err != nil {
-		log.Printf("Failed to read file: %v", err)
+		s.logger.Error("failed to read file", zap.Error(err))
 		return "", fmt.Errorf("failed to read file: %w", err)
 	}
 
@@ -68,11 +83,17 @@ func (s *localStackS3Storage) Upload(file io.Reader, filename string, contentTyp
 	})
 
 	if err != nil {
-		log.Printf("S3 upload failed: %v", err)
+		s.logger.Error("s3 upload failed",
+			zap.String("key", key),
+			zap.Error(err),
+		)
 		return "", err
 	}
 
-	log.Printf("S3 upload successful: key=%s", key)
+	s.logger.Info("s3 upload successful",
+		zap.String("key", key),
+		zap.Int("size_bytes", len(fileBytes)),
+	)
 	return key, nil
 }
 
