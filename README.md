@@ -292,6 +292,31 @@ go tool cover -html=coverage.out
 - **Comprehensive**: Tests happy paths, error cases, and edge conditions
 - **Performance**: Tests caching behavior and performance characteristics
 
+## CI/CD Pipeline
+
+The project includes a comprehensive GitHub Actions workflow for continuous integration:
+
+### Pipeline Features
+- **Testcontainers Integration**: Real PostgreSQL and Redis containers for authentic testing
+- **Docker-in-Docker**: Full container orchestration support in CI environment
+- **Race Detection**: Concurrent testing for thread safety validation
+- **Coverage Reporting**: Comprehensive test coverage metrics (77.6%)
+- **Test Isolation**: Fresh database and cache containers for each test run
+
+### Workflow Configuration
+```yaml
+# .github/workflows/ci.yml
+- Docker-in-Docker service for Testcontainers
+- PostgreSQL and Redis containers for integration tests
+- Race condition testing with coverage reporting
+- Automatic deployment to Railway on main branch
+```
+
+### CI Environment Variables
+- `TESTCONTAINERS_RYUK_DISABLED=true` - Disables cleanup for CI stability
+- Docker Compose support for multi-container testing
+- Go 1.23.x with race detection enabled
+
 ## Production Considerations
 
 **Caching:**
