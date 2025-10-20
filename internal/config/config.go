@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -17,6 +18,10 @@ type Config struct {
 	LogFormat       string
 	DefaultPageSize int
 	MaxPageSize     int
+	RedisAddr       string
+	RedisPassword   string
+	RedisDB         int
+	CacheTTL        time.Duration
 }
 
 func Load() *Config {
@@ -30,6 +35,10 @@ func Load() *Config {
 		LogFormat:       getEnv("LOG_FORMAT", "json"),
 		DefaultPageSize: getEnvInt("DEFAULT_PAGE_SIZE", 20),
 		MaxPageSize:     getEnvInt("MAX_PAGE_SIZE", 100),
+		RedisAddr:       getEnv("REDIS_ADDR", "localhost:6379"),
+		RedisPassword:   getEnv("REDIS_PASSWORD", ""),
+		RedisDB:         getEnvInt("REDIS_DB", 0),
+		CacheTTL:        getDurationEnv("CACHE_TTL", 5*time.Minute),
 	}
 }
 
@@ -59,6 +68,15 @@ func getEnvInt(key string, defaultValue int) int {
 	if value, ok := os.LookupEnv(key); ok {
 		if intValue, err := strconv.Atoi(value); err == nil {
 			return intValue
+		}
+	}
+	return defaultValue
+}
+
+func getDurationEnv(key string, defaultValue time.Duration) time.Duration {
+	if value, ok := os.LookupEnv(key); ok {
+		if duration, err := time.ParseDuration(value); err == nil {
+			return duration
 		}
 	}
 	return defaultValue

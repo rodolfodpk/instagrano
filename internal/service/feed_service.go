@@ -1,8 +1,13 @@
 package service
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"sort"
+	"time"
 
+	"github.com/rodolfodpk/instagrano/internal/cache"
 	"github.com/rodolfodpk/instagrano/internal/domain"
 	"github.com/rodolfodpk/instagrano/internal/pagination"
 	"github.com/rodolfodpk/instagrano/internal/repository/postgres"
@@ -11,24 +16,81 @@ import (
 
 type FeedService struct {
 	postRepo postgres.PostRepository
+	cache    cache.Cache
+	cacheTTL time.Duration
 	logger   *zap.Logger
 }
 
-func NewFeedService(postRepo postgres.PostRepository) *FeedService {
+func NewFeedService(postRepo postgres.PostRepository, cache cache.Cache, cacheTTL time.Duration) *FeedService {
 	logger, _ := zap.NewProduction()
 	return &FeedService{
 		postRepo: postRepo,
+		cache:    cache,
+		cacheTTL: cacheTTL,
 		logger:   logger,
 	}
 }
 
-// GetFeedWithCursor implements cursor-based pagination
+// GetFeedWithCursor implements cursor-based pagination with caching
 func (s *FeedService) GetFeedWithCursor(limit int, cursor string) (*pagination.FeedResult, error) {
+	start := time.Now()
+	cacheKey := fmt.Sprintf("feed:cursor:%s:limit:%d", cursor, limit)
+	ctx := context.Background()
+
 	s.logger.Info("getting feed with cursor",
 		zap.Int("limit", limit),
 		zap.String("cursor", cursor),
+		zap.String("cache_key", cacheKey),
 	)
 
+	// Try cache first
+	if cached, err := s.cache.Get(ctx, cacheKey); err == nil {
+		var result pagination.FeedResult
+		if unmarshalErr := json.Unmarshal(cached, &result); unmarshalErr == nil {
+			s.logger.Info("cache hit",
+				zap.String("cache_key", cacheKey),
+				zap.Duration("duration", time.Since(start)),
+			)
+			return &result, nil
+		}
+	}
+
+	// Cache miss - fetch from database
+	s.logger.Info("cache miss - fetching from database",
+		zap.String("cache_key", cacheKey),
+	)
+
+	result, err := s.getFeedFromDatabase(limit, cursor)
+	if err != nil {
+		return nil, err
+	}
+
+	// Store in cache (best effort - don't fail if cache set fails)
+	if data, marshalErr := json.Marshal(result); marshalErr == nil {
+		if setErr := s.cache.Set(ctx, cacheKey, data, s.cacheTTL); setErr != nil {
+			s.logger.Warn("failed to cache result",
+				zap.String("cache_key", cacheKey),
+				zap.Error(setErr),
+			)
+		} else {
+			s.logger.Info("cached result",
+				zap.String("cache_key", cacheKey),
+				zap.Duration("ttl", s.cacheTTL),
+			)
+		}
+	}
+
+	s.logger.Info("feed retrieved successfully",
+		zap.Int("posts_count", len(result.Posts)),
+		zap.Bool("has_more", result.HasMore),
+		zap.Duration("duration", time.Since(start)),
+	)
+
+	return result, nil
+}
+
+// getFeedFromDatabase fetches feed from the database (extracted for caching logic)
+func (s *FeedService) getFeedFromDatabase(limit int, cursor string) (*pagination.FeedResult, error) {
 	// Decode cursor if provided
 	var cursorObj *pagination.Cursor
 	var err error
@@ -72,12 +134,6 @@ func (s *FeedService) GetFeedWithCursor(limit int, cursor string) (*pagination.F
 		}
 		nextCursor = nextCursorObj.Encode()
 	}
-
-	s.logger.Info("feed retrieved successfully",
-		zap.Int("posts_count", len(posts)),
-		zap.Bool("has_more", hasMore),
-		zap.String("next_cursor", nextCursor),
-	)
 
 	return &pagination.FeedResult{
 		Posts:      convertPostsToInterface(posts),

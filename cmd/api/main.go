@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/rodolfodpk/instagrano/internal/cache"
 	"github.com/rodolfodpk/instagrano/internal/config"
 	"github.com/rodolfodpk/instagrano/internal/handler"
 	"github.com/rodolfodpk/instagrano/internal/logger"
@@ -55,6 +56,17 @@ func main() {
 		zap.String("bucket", cfg.S3Bucket),
 	)
 
+	// Initialize Redis cache
+	redisCache, err := cache.NewRedisCache(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB, appLogger.Logger)
+	if err != nil {
+		appLogger.Fatal("redis connection failed", zap.Error(err))
+	}
+
+	appLogger.Info("redis cache initialized",
+		zap.String("addr", cfg.RedisAddr),
+		zap.Duration("ttl", cfg.CacheTTL),
+	)
+
 	// Initialize repositories
 	userRepo := postgres.NewUserRepository(db)
 	postRepo := postgres.NewPostRepository(db)
@@ -64,7 +76,7 @@ func main() {
 	// Initialize services
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret)
 	postService := service.NewPostService(postRepo, mediaStorage)
-	feedService := service.NewFeedService(postRepo)
+	feedService := service.NewFeedService(postRepo, redisCache, cfg.CacheTTL)
 	interactionService := service.NewInteractionService(likeRepo, commentRepo)
 
 	// Initialize handlers
@@ -82,9 +94,19 @@ func main() {
 	app.Static("/", "./web/public")
 
 	app.Get("/health", func(c *fiber.Ctx) error {
+		// Check Redis
+		if err := redisCache.Ping(c.Context()); err != nil {
+			return c.Status(503).JSON(fiber.Map{
+				"status":   "unhealthy",
+				"database": "connected",
+				"redis":    "disconnected",
+			})
+		}
+
 		return c.JSON(fiber.Map{
 			"status":   "ok",
 			"database": "connected",
+			"redis":    "connected",
 		})
 	})
 

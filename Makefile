@@ -51,3 +51,12 @@ health:
 # Run integration tests (expects server already running)
 itest:
 	@./run_integration_tests.sh
+
+# Redis utilities
+.PHONY: redis-cli redis-flush
+
+redis-cli:
+	docker-compose exec redis redis-cli
+
+redis-flush:
+	docker-compose exec redis redis-cli FLUSHDB
