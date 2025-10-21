@@ -31,7 +31,29 @@
                 <option value="image">Image</option>
                 <option value="video">Video</option>
             </select>
-            <input type="file" x-ref="fileInput" accept="image/*,video/*" style="width: 100%; padding: 10px; margin: 5px 0;">
+            
+            <!-- Upload Method Toggle -->
+            <div style="margin: 10px 0;">
+                <label style="margin-right: 20px;">
+                    <input type="radio" x-model="uploadMethod" value="file" style="margin-right: 5px;">
+                    Upload File
+                </label>
+                <label>
+                    <input type="radio" x-model="uploadMethod" value="url" style="margin-right: 5px;">
+                    Upload from URL
+                </label>
+            </div>
+            
+            <!-- File Upload -->
+            <div x-show="uploadMethod === 'file'">
+                <input type="file" x-ref="fileInput" accept="image/*,video/*" style="width: 100%; padding: 10px; margin: 5px 0;">
+            </div>
+            
+            <!-- URL Upload -->
+            <div x-show="uploadMethod === 'url'">
+                <input x-model="newPost.mediaUrl" placeholder="Enter image/video URL (e.g., https://example.com/image.jpg)" style="width: 100%; padding: 10px; margin: 5px 0;">
+            </div>
+            
             <button @click="createPost" style="width: 100%; padding: 10px; background: #28a745; color: white; border: none;">Create Post</button>
         </div>
         
@@ -102,8 +124,10 @@
             newPost: {
                 title: '',
                 caption: '',
-                mediaType: 'image'
+                mediaType: 'image',
+                mediaUrl: ''
             },
+            uploadMethod: 'file', // 'file' or 'url'
             activeViews: {}, // Track active view sessions (postId -> started_at timestamp)
             observer: null,
             eventSource: null, // SSE connection
@@ -137,18 +161,40 @@
                 try {
                     const token = localStorage.getItem('token');
                     console.log('Using token:', token ? token.substring(0, 20) + '...' : 'No token');
-                    const fileInput = this.$refs.fileInput;
                     
-                    if (!fileInput.files[0]) {
-                        this.error = 'Please select a file';
-                        return;
+                    // Validate input based on upload method
+                    if (this.uploadMethod === 'file') {
+                        const fileInput = this.$refs.fileInput;
+                        if (!fileInput.files[0]) {
+                            this.error = 'Please select a file';
+                            return;
+                        }
+                    } else if (this.uploadMethod === 'url') {
+                        if (!this.newPost.mediaUrl.trim()) {
+                            this.error = 'Please enter a media URL';
+                            return;
+                        }
+                        // Basic URL validation
+                        try {
+                            new URL(this.newPost.mediaUrl);
+                        } catch {
+                            this.error = 'Please enter a valid URL';
+                            return;
+                        }
                     }
                     
                     const formData = new FormData();
                     formData.append('title', this.newPost.title);
                     formData.append('caption', this.newPost.caption);
                     formData.append('media_type', this.newPost.mediaType);
-                    formData.append('media', fileInput.files[0]);
+                    
+                    // Add media based on upload method
+                    if (this.uploadMethod === 'file') {
+                        const fileInput = this.$refs.fileInput;
+                        formData.append('media', fileInput.files[0]);
+                    } else if (this.uploadMethod === 'url') {
+                        formData.append('media_url', this.newPost.mediaUrl);
+                    }
                     
                     const response = await fetch('http://localhost:8080/api/posts', {
                         method: 'POST',
@@ -163,10 +209,16 @@
                     });
                     
                     if (response.ok) {
+                        // Reset form
                         this.newPost.title = '';
                         this.newPost.caption = '';
                         this.newPost.mediaType = 'image';
-                        fileInput.value = '';
+                        this.newPost.mediaUrl = '';
+                        if (this.uploadMethod === 'file') {
+                            const fileInput = this.$refs.fileInput;
+                            fileInput.value = '';
+                        }
+                        
                         // Reset pagination state and reload feed
                         this.posts = [];
                         this.nextCursor = '';
