@@ -23,6 +23,7 @@ make docker-up
 
 # Verify services are running
 curl http://localhost:4566/_localstack/health  # LocalStack
+docker-compose exec postgres pg_isready -U postgres  # PostgreSQL
 docker-compose exec redis redis-cli ping       # Redis
 
 # Run migrations
