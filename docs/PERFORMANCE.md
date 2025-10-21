@@ -166,7 +166,7 @@ iterations.....................: 872     28.932820/s
 **Cache Performance Analysis**:
 - **Cache Hit Duration**: avg 1.83ms, p95 7ms ✅ (threshold: p95 < 50ms)
 - **Cache Miss Duration**: avg 5.08ms, p95 15ms ✅ (threshold: p95 < 200ms)
-- **Cache Improvement**: **64% faster** (1.83ms vs 5.08ms)
+- **Cache Improvement**: **64% reduction** (1.83ms vs 5.08ms)
 - **High Throughput**: 144 requests/second, 872 iterations
 - **Success Rate**: 100% (1744/1744 checks passed)
 
@@ -220,9 +220,9 @@ iterations.....................: 24      0.479648/s
 
 ### Key Achievements
 1. **Zero Failures**: All 6 test scenarios pass with 100% success rate
-2. **Fast Response Times**: p95 response times consistently under 100ms
+2. **Response Times**: p95 response times consistently under 100ms
 3. **Effective Caching**: Significant performance improvements with Redis caching
-4. **Dual Upload Support**: Both file upload and URL-based upload working perfectly
+4. **Dual Upload Support**: Both file upload and URL-based upload working correctly
 5. **High Throughput**: Up to 144 requests/second for cached operations
 
 ### Test Files Reference

@@ -97,10 +97,10 @@ The frontend includes:
 
 ## Redis Caching
 
-The application uses Redis for high-performance feed caching with dramatic performance improvements:
+The application uses Redis for feed caching with performance improvements:
 
 **Performance Impact:**
-- **Cache Hit**: ~1-2ms response time (10x faster)
+- **Cache Hit**: ~1-2ms response time
 - **Cache Miss**: ~13-22ms response time (database query)
 - **Expected Hit Rate**: 70-80% in steady state
 
@@ -151,7 +151,7 @@ Cache operations are logged with structured fields for monitoring:
 ```
 
 **Trade-offs:**
-- ✅ **Pros**: 10x faster responses, reduced DB load, horizontally scalable
+- ✅ **Pros**: Reduced response time, reduced DB load, horizontally scalable
 - ⚠️ **Cons**: Data up to 5 minutes stale, additional service dependency, memory usage
 
 ## View Time Tracking
@@ -196,7 +196,7 @@ CREATE TABLE post_views (
 
 ## Structured Logging
 
-The application uses Zap for high-performance structured logging:
+The application uses Zap for structured logging:
 
 **Configuration:**
 - `LOG_LEVEL`: debug, info, warn, error (default: info)
@@ -504,8 +504,8 @@ The project includes a comprehensive GitHub Actions workflow for continuous inte
 - Caching works seamlessly with cursor-based pagination
 
 **Performance:**
-- Redis caching provides 10x speedup for cached feed requests
-- Zap logger is 3-4x faster than standard library logging
+- Redis caching provides significant speedup for cached feed requests
+- Zap logger provides improved performance over standard library logging
 - Zero-allocation logging reduces GC pressure
 - Request correlation IDs enable distributed tracing
 - Monitor cache memory usage and eviction policies
