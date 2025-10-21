@@ -86,7 +86,7 @@ func TestConfig_LoadWithDefaults(t *testing.T) {
 	Expect(cfg.S3Endpoint).To(Equal("http://localhost:4566"))
 	Expect(cfg.S3Bucket).To(Equal("instagrano-media"))
 	Expect(cfg.JWTSecret).To(Equal("dev-secret"))
-	Expect(cfg.Port).To(Equal("3000"))
+	Expect(cfg.Port).To(Equal("8080"))
 	Expect(cfg.LogLevel).To(Equal("info"))
 	Expect(cfg.LogFormat).To(Equal("json"))
 	Expect(cfg.DefaultPageSize).To(Equal(20))
