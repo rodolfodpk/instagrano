@@ -1,6 +1,6 @@
 # 🚀 Instagrano MVP
 
-[![Test Coverage](https://img.shields.io/badge/coverage-77.6%25-brightgreen)](https://github.com/rodolfodpk/instagrano)
+[![Test Coverage](https://img.shields.io/badge/coverage-81.9%25-brightgreen)](https://github.com/rodolfodpk/instagrano)
 
 A mini Instagram API built with Go Fiber, PostgreSQL, Redis caching, LocalStack S3, Zap structured logging, Testcontainers testing, Gomega BDD assertions, Docker Compose, and JWT authentication.
 
