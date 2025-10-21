@@ -45,16 +45,19 @@ export default function () {
   
   sleep(1);
   
-  // Create post with file upload
+  // Create post with URL upload (using our new feature)
   const postRes = http.post(
     `${config.apiUrl}/api/posts`,
     {
       title: `Load Test Post ${Date.now()}`,
       caption: `This is a load test post created at ${new Date().toISOString()}`,
-      media_type: 'image',
-      media: http.file('tests/k6/fixtures/test-image.png', 'test-image.png', 'image/png'),
+      media_url: 'https://via.placeholder.com/150.jpg', // Will be mapped to static image
     },
-    { headers: authHeader(token) }
+    { 
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      }
+    }
   );
   
   const postSuccess = check(postRes, {

@@ -259,11 +259,11 @@ func setupTestApp(t *testing.T) (*fiber.App, *TestContainers, func()) {
 	// Initialize services
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret)
 	feedService := service.NewFeedService(postRepo, sharedContainers.Cache, cfg.CacheTTL)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, sharedContainers.Cache)
 
 	// Create mock S3 storage for testing
 	mockStorage := NewMockMediaStorage()
-	postService := service.NewPostService(postRepo, mockStorage)
+	postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, cfg.CacheTTL)
 
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(authService)

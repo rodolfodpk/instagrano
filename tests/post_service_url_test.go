@@ -2,8 +2,10 @@ package tests
 
 import (
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
+
 	"github.com/rodolfodpk/instagrano/internal/domain"
 	"github.com/rodolfodpk/instagrano/internal/repository/postgres"
 	"github.com/rodolfodpk/instagrano/internal/service"
@@ -32,7 +34,7 @@ func TestPostService_CreatePostFromURL(t *testing.T) {
 	postRepo := postgres.NewPostRepository(containers.DB)
 
 	// Setup post service
-	postService := service.NewPostService(postRepo, mockStorage)
+	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
 
 	// Create test user
 	user := &domain.User{
@@ -75,7 +77,7 @@ func TestPostService_CreatePostFromURLVideo(t *testing.T) {
 	postRepo := postgres.NewPostRepository(containers.DB)
 
 	// Setup post service
-	postService := service.NewPostService(postRepo, mockStorage)
+	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
 
 	// Create test user
 	user := &domain.User{
@@ -109,7 +111,7 @@ func TestPostService_CreatePostFromURLInvalidURL(t *testing.T) {
 	postRepo := postgres.NewPostRepository(containers.DB)
 
 	// Setup post service
-	postService := service.NewPostService(postRepo, mockStorage)
+	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
 
 	// Create test user
 	user := &domain.User{
@@ -142,7 +144,7 @@ func TestPostService_CreatePostFromURLDownloadFailure(t *testing.T) {
 	postRepo := postgres.NewPostRepository(containers.DB)
 
 	// Setup post service
-	postService := service.NewPostService(postRepo, mockStorage)
+	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
 
 	// Create test user
 	user := &domain.User{
@@ -175,7 +177,7 @@ func TestPostService_CreatePostFromURLEmptyTitle(t *testing.T) {
 	postRepo := postgres.NewPostRepository(containers.DB)
 
 	// Setup post service
-	postService := service.NewPostService(postRepo, mockStorage)
+	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
 
 	// Create test user
 	user := &domain.User{
@@ -208,7 +210,7 @@ func TestPostService_CreatePostFromURLEmptyURL(t *testing.T) {
 	postRepo := postgres.NewPostRepository(containers.DB)
 
 	// Setup post service
-	postService := service.NewPostService(postRepo, mockStorage)
+	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
 
 	// Create test user
 	user := &domain.User{

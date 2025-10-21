@@ -19,12 +19,20 @@ export default function () {
   const userData = generateUserData();
   
   // Register and login
-  http.post(`${config.apiUrl}/auth/register`, JSON.stringify(userData), 
+  const registerRes = http.post(`${config.apiUrl}/api/auth/register`, JSON.stringify(userData), 
     { headers: { 'Content-Type': 'application/json' } });
   
-  const loginRes = http.post(`${config.apiUrl}/auth/login`, 
+  if (!check(registerRes, { 'registration successful': (r) => r.status === 200 })) {
+    return;
+  }
+  
+  const loginRes = http.post(`${config.apiUrl}/api/auth/login`, 
     JSON.stringify({ email: userData.email, password: userData.password }), 
     { headers: { 'Content-Type': 'application/json' } });
+  
+  if (!check(loginRes, { 'login successful': (r) => r.status === 200 })) {
+    return;
+  }
   
   const token = loginRes.json('token');
   if (!token) return;
@@ -35,13 +43,18 @@ export default function () {
   const randomURL = TEST_IMAGE_URLS[Math.floor(Math.random() * TEST_IMAGE_URLS.length)];
   
   const postRes = http.post(
-    `${config.apiUrl}/posts`,
+    `${config.apiUrl}/api/posts`,
     {
       title: `URL Post ${Date.now()}`,
       caption: 'Created from external URL',
       media_url: randomURL,
     },
-    { headers: authHeader(token) }
+    { 
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data',
+      }
+    }
   );
   
   check(postRes, {

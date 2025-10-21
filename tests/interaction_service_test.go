@@ -18,7 +18,7 @@ func TestInteractionService_LikePost(t *testing.T) {
 
 	likeRepo := postgresRepo.NewLikeRepository(containers.DB)
 	commentRepo := postgresRepo.NewCommentRepository(containers.DB)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, containers.Cache)
 
 	// Given: User and post exist
 	user := createTestUser(t, containers.DB, "likeuser", "like@example.com")
@@ -51,7 +51,7 @@ func TestInteractionService_LikePostDuplicate(t *testing.T) {
 
 	likeRepo := postgresRepo.NewLikeRepository(containers.DB)
 	commentRepo := postgresRepo.NewCommentRepository(containers.DB)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, containers.Cache)
 
 	// Given: User and post exist
 	user := createTestUser(t, containers.DB, "duplicateuser", "duplicate@example.com")
@@ -87,7 +87,7 @@ func TestInteractionService_LikePostNonExistentPost(t *testing.T) {
 
 	likeRepo := postgresRepo.NewLikeRepository(containers.DB)
 	commentRepo := postgresRepo.NewCommentRepository(containers.DB)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, containers.Cache)
 
 	// Given: User exists but post doesn't
 	user := createTestUser(t, containers.DB, "nonexistentuser", "nonexistent@example.com")
@@ -109,7 +109,7 @@ func TestInteractionService_LikePostNonExistentUser(t *testing.T) {
 
 	likeRepo := postgresRepo.NewLikeRepository(containers.DB)
 	commentRepo := postgresRepo.NewCommentRepository(containers.DB)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, containers.Cache)
 
 	// Given: Post exists but user doesn't
 	user := createTestUser(t, containers.DB, "postowner", "owner@example.com")
@@ -132,7 +132,7 @@ func TestInteractionService_CommentPost(t *testing.T) {
 
 	likeRepo := postgresRepo.NewLikeRepository(containers.DB)
 	commentRepo := postgresRepo.NewCommentRepository(containers.DB)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, containers.Cache)
 
 	// Given: User and post exist
 	user := createTestUser(t, containers.DB, "commentuser", "comment@example.com")
@@ -167,7 +167,7 @@ func TestInteractionService_CommentPostEmptyText(t *testing.T) {
 
 	likeRepo := postgresRepo.NewLikeRepository(containers.DB)
 	commentRepo := postgresRepo.NewCommentRepository(containers.DB)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, containers.Cache)
 
 	// Given: User and post exist
 	user := createTestUser(t, containers.DB, "emptycomment", "empty@example.com")
@@ -199,7 +199,7 @@ func TestInteractionService_CommentPostLongText(t *testing.T) {
 
 	likeRepo := postgresRepo.NewLikeRepository(containers.DB)
 	commentRepo := postgresRepo.NewCommentRepository(containers.DB)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, containers.Cache)
 
 	// Given: User and post exist
 	user := createTestUser(t, containers.DB, "longcomment", "long@example.com")
@@ -235,7 +235,7 @@ func TestInteractionService_CommentPostNonExistentPost(t *testing.T) {
 
 	likeRepo := postgresRepo.NewLikeRepository(containers.DB)
 	commentRepo := postgresRepo.NewCommentRepository(containers.DB)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, containers.Cache)
 
 	// Given: User exists but post doesn't
 	user := createTestUser(t, containers.DB, "nonexistentcomment", "nonexistent@example.com")
@@ -257,7 +257,7 @@ func TestInteractionService_MultipleUsersLikeSamePost(t *testing.T) {
 
 	likeRepo := postgresRepo.NewLikeRepository(containers.DB)
 	commentRepo := postgresRepo.NewCommentRepository(containers.DB)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, containers.Cache)
 
 	// Given: Multiple users and one post
 	user1 := createTestUser(t, containers.DB, "user1", "user1@example.com")
@@ -294,7 +294,7 @@ func TestInteractionService_MultipleCommentsOnSamePost(t *testing.T) {
 
 	likeRepo := postgresRepo.NewLikeRepository(containers.DB)
 	commentRepo := postgresRepo.NewCommentRepository(containers.DB)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, containers.Cache)
 
 	// Given: Multiple users and one post
 	user1 := createTestUser(t, containers.DB, "commenter1", "commenter1@example.com")

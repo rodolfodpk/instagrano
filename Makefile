@@ -1,4 +1,4 @@
-.PHONY: run test docker-up docker-down migrate clean stop start restart itest health swagger swagger-ui start-all k6-install k6-auth k6-cache k6-posts k6-posts-url k6-journey k6-all
+.PHONY: run test docker-up docker-down migrate clean stop start restart itest health swagger swagger-ui start-all k6-install k6-auth k6-cache k6-posts k6-posts-url k6-post-retrieval k6-journey k6-all
 
 # Defaults (can be overridden)
 PORT ?= 8080
@@ -107,10 +107,15 @@ k6-journey:
 	@echo "Running K6 full user journey test..."
 	@k6 run tests/k6/scenarios/user-journey.js
 
+k6-post-retrieval:
+	@echo "Running K6 post retrieval cache test..."
+	@k6 run tests/k6/scenarios/post-retrieval.js
+
 k6-all: k6-install
 	@echo "Running all K6 performance tests..."
 	@k6 run tests/k6/scenarios/auth.js
 	@k6 run tests/k6/scenarios/feed-cache.js
 	@k6 run tests/k6/scenarios/posts.js
 	@k6 run tests/k6/scenarios/posts-url.js
+	@k6 run tests/k6/scenarios/post-retrieval.js
 	@k6 run tests/k6/scenarios/user-journey.js

@@ -106,9 +106,9 @@ func main() {
 
 	// Initialize services
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret)
-	postService := service.NewPostService(postRepo, mediaStorage)
+	postService := service.NewPostService(postRepo, mediaStorage, redisCache, cfg.CacheTTL)
 	feedService := service.NewFeedService(postRepo, redisCache, cfg.CacheTTL)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, redisCache)
 	viewService := service.NewPostViewService(viewRepo)
 
 	// Initialize handlers

@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 
@@ -22,7 +23,7 @@ func TestPostService_CreatePost(t *testing.T) {
 
 	postRepo := postgresRepo.NewPostRepository(containers.DB)
 	mockStorage := NewMockMediaStorage()
-	postService := service.NewPostService(postRepo, mockStorage)
+	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
 
 	// Given: User exists
 	user := createTestUser(t, containers.DB, "postuser", "post@example.com")
@@ -64,7 +65,7 @@ func TestPostService_CreatePostWithVideo(t *testing.T) {
 
 	postRepo := postgresRepo.NewPostRepository(containers.DB)
 	mockStorage := NewMockMediaStorage()
-	postService := service.NewPostService(postRepo, mockStorage)
+	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
 
 	user := createTestUser(t, containers.DB, "videouser", "video@example.com")
 
@@ -99,7 +100,7 @@ func TestPostService_CreatePostEmptyTitle(t *testing.T) {
 
 	postRepo := postgresRepo.NewPostRepository(containers.DB)
 	mockStorage := NewMockMediaStorage()
-	postService := service.NewPostService(postRepo, mockStorage)
+	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
 
 	user := createTestUser(t, containers.DB, "emptytitle", "empty@example.com")
 
@@ -129,7 +130,7 @@ func TestPostService_CreatePostS3UploadFailure(t *testing.T) {
 
 	// Create a mock storage that will fail
 	failingStorage := NewFailingMockStorage()
-	postService := service.NewPostService(postRepo, failingStorage)
+	postService := service.NewPostService(postRepo, failingStorage, containers.Cache, 5*time.Minute)
 
 	user := createTestUser(t, containers.DB, "failuser", "fail@example.com")
 
@@ -162,7 +163,7 @@ func TestPostService_GetPost(t *testing.T) {
 
 	postRepo := postgresRepo.NewPostRepository(containers.DB)
 	mockStorage := NewMockMediaStorage()
-	postService := service.NewPostService(postRepo, mockStorage)
+	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
 
 	// Given: User and post exist
 	user := createTestUser(t, containers.DB, "getuser", "get@example.com")
@@ -188,7 +189,7 @@ func TestPostService_GetPostNotFound(t *testing.T) {
 
 	postRepo := postgresRepo.NewPostRepository(containers.DB)
 	mockStorage := NewMockMediaStorage()
-	postService := service.NewPostService(postRepo, mockStorage)
+	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
 
 	// When: Get non-existent post
 	post, err := postService.GetPost(99999)
@@ -207,7 +208,7 @@ func TestPostService_CreatePostWithLargeFile(t *testing.T) {
 
 	postRepo := postgresRepo.NewPostRepository(containers.DB)
 	mockStorage := NewMockMediaStorage()
-	postService := service.NewPostService(postRepo, mockStorage)
+	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
 
 	user := createTestUser(t, containers.DB, "largefile", "large@example.com")
 
@@ -245,7 +246,7 @@ func TestPostService_CreatePostWithSpecialCharacters(t *testing.T) {
 
 	postRepo := postgresRepo.NewPostRepository(containers.DB)
 	mockStorage := NewMockMediaStorage()
-	postService := service.NewPostService(postRepo, mockStorage)
+	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
 
 	user := createTestUser(t, containers.DB, "special", "special@example.com")
 

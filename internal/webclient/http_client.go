@@ -90,19 +90,15 @@ func (c *DefaultHTTPClient) Download(ctx context.Context, url string) (*Download
 	}, nil
 }
 
-// rewriteToMockURL maps external URLs to our test controller endpoints
+// rewriteToMockURL maps external URLs to our static test image
 func (c *DefaultHTTPClient) rewriteToMockURL(originalURL string) string {
-	// Map common external URLs to our test controller endpoints
-	if strings.Contains(originalURL, "placeholder.com") {
-		return c.config.MockBaseURL + "/test/image"
+	// Only map known test URLs to our static image for better performance
+	if strings.Contains(originalURL, "placeholder.com") ||
+		strings.Contains(originalURL, "httpbin.org") ||
+		strings.Contains(originalURL, "example.com") {
+		return c.config.MockBaseURL + "/static/test-image.jpg"
 	}
-	if strings.Contains(originalURL, "httpbin.org") {
-		return c.config.MockBaseURL + "/test/image/png"
-	}
-	if strings.Contains(originalURL, "example.com") {
-		return c.config.MockBaseURL + "/test/image"
-	}
-	
+
 	// For unmapped URLs, return the original URL (don't rewrite)
 	return originalURL
 }

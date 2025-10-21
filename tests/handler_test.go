@@ -25,7 +25,7 @@ func TestPostHandler_GetPost(t *testing.T) {
 
 	postRepo := postgresRepo.NewPostRepository(containers.DB)
 	mockStorage := NewMockMediaStorage()
-	postService := service.NewPostService(postRepo, mockStorage)
+	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
 	postHandler := handler.NewPostHandler(postService)
 
 	// Given: A post exists
@@ -60,7 +60,7 @@ func TestPostHandler_GetPostNotFound(t *testing.T) {
 
 	postRepo := postgresRepo.NewPostRepository(containers.DB)
 	mockStorage := NewMockMediaStorage()
-	postService := service.NewPostService(postRepo, mockStorage)
+	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
 	postHandler := handler.NewPostHandler(postService)
 
 	// Create Fiber app
@@ -85,7 +85,7 @@ func TestPostHandler_GetPostInvalidID(t *testing.T) {
 
 	postRepo := postgresRepo.NewPostRepository(containers.DB)
 	mockStorage := NewMockMediaStorage()
-	postService := service.NewPostService(postRepo, mockStorage)
+	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
 	postHandler := handler.NewPostHandler(postService)
 
 	// Create Fiber app
