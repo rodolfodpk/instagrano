@@ -18,14 +18,15 @@ func TestInteractionService_LikePost(t *testing.T) {
 
 	likeRepo := postgresRepo.NewLikeRepository(containers.DB)
 	commentRepo := postgresRepo.NewCommentRepository(containers.DB)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo, containers.Cache)
+	postRepo := postgresRepo.NewPostRepository(containers.DB)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, containers.Cache)
 
 	// Given: User and post exist
 	user := createTestUser(t, containers.DB, "likeuser", "like@example.com")
 	post := createTestPost(t, containers.DB, user.ID, "Post to Like", "This post will be liked")
 
 	// When: User likes the post
-	err := interactionService.LikePost(user.ID, post.ID)
+	_, _, err := interactionService.LikePost(user.ID, post.ID)
 
 	// Then: Like is created successfully
 	Expect(err).NotTo(HaveOccurred())
@@ -51,18 +52,19 @@ func TestInteractionService_LikePostDuplicate(t *testing.T) {
 
 	likeRepo := postgresRepo.NewLikeRepository(containers.DB)
 	commentRepo := postgresRepo.NewCommentRepository(containers.DB)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo, containers.Cache)
+	postRepo := postgresRepo.NewPostRepository(containers.DB)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, containers.Cache)
 
 	// Given: User and post exist
 	user := createTestUser(t, containers.DB, "duplicateuser", "duplicate@example.com")
 	post := createTestPost(t, containers.DB, user.ID, "Post to Like Twice", "This post will be liked twice")
 
 	// When: User likes the post first time
-	err1 := interactionService.LikePost(user.ID, post.ID)
+	_, _, err1 := interactionService.LikePost(user.ID, post.ID)
 	Expect(err1).NotTo(HaveOccurred())
 
 	// When: User tries to like the same post again
-	err2 := interactionService.LikePost(user.ID, post.ID)
+	_, _, err2 := interactionService.LikePost(user.ID, post.ID)
 
 	// Then: Second like fails due to unique constraint
 	Expect(err2).To(HaveOccurred())
@@ -87,14 +89,15 @@ func TestInteractionService_LikePostNonExistentPost(t *testing.T) {
 
 	likeRepo := postgresRepo.NewLikeRepository(containers.DB)
 	commentRepo := postgresRepo.NewCommentRepository(containers.DB)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo, containers.Cache)
+	postRepo := postgresRepo.NewPostRepository(containers.DB)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, containers.Cache)
 
 	// Given: User exists but post doesn't
 	user := createTestUser(t, containers.DB, "nonexistentuser", "nonexistent@example.com")
 	nonExistentPostID := uint(99999)
 
 	// When: User tries to like non-existent post
-	err := interactionService.LikePost(user.ID, nonExistentPostID)
+	_, _, err := interactionService.LikePost(user.ID, nonExistentPostID)
 
 	// Then: Like fails due to foreign key constraint
 	Expect(err).To(HaveOccurred())
@@ -109,7 +112,8 @@ func TestInteractionService_LikePostNonExistentUser(t *testing.T) {
 
 	likeRepo := postgresRepo.NewLikeRepository(containers.DB)
 	commentRepo := postgresRepo.NewCommentRepository(containers.DB)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo, containers.Cache)
+	postRepo := postgresRepo.NewPostRepository(containers.DB)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, containers.Cache)
 
 	// Given: Post exists but user doesn't
 	user := createTestUser(t, containers.DB, "postowner", "owner@example.com")
@@ -117,7 +121,7 @@ func TestInteractionService_LikePostNonExistentUser(t *testing.T) {
 	nonExistentUserID := uint(99999)
 
 	// When: Non-existent user tries to like post
-	err := interactionService.LikePost(nonExistentUserID, post.ID)
+	_, _, err := interactionService.LikePost(nonExistentUserID, post.ID)
 
 	// Then: Like fails due to foreign key constraint
 	Expect(err).To(HaveOccurred())
@@ -132,7 +136,8 @@ func TestInteractionService_CommentPost(t *testing.T) {
 
 	likeRepo := postgresRepo.NewLikeRepository(containers.DB)
 	commentRepo := postgresRepo.NewCommentRepository(containers.DB)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo, containers.Cache)
+	postRepo := postgresRepo.NewPostRepository(containers.DB)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, containers.Cache)
 
 	// Given: User and post exist
 	user := createTestUser(t, containers.DB, "commentuser", "comment@example.com")
@@ -140,7 +145,7 @@ func TestInteractionService_CommentPost(t *testing.T) {
 	commentText := "This is a great post!"
 
 	// When: User comments on the post
-	err := interactionService.CommentPost(user.ID, post.ID, commentText)
+	_, _, err := interactionService.CommentPost(user.ID, post.ID, commentText)
 
 	// Then: Comment is created successfully
 	Expect(err).NotTo(HaveOccurred())
@@ -167,14 +172,15 @@ func TestInteractionService_CommentPostEmptyText(t *testing.T) {
 
 	likeRepo := postgresRepo.NewLikeRepository(containers.DB)
 	commentRepo := postgresRepo.NewCommentRepository(containers.DB)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo, containers.Cache)
+	postRepo := postgresRepo.NewPostRepository(containers.DB)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, containers.Cache)
 
 	// Given: User and post exist
 	user := createTestUser(t, containers.DB, "emptycomment", "empty@example.com")
 	post := createTestPost(t, containers.DB, user.ID, "Post to Comment", "This post will be commented on")
 
 	// When: User tries to comment with empty text
-	err := interactionService.CommentPost(user.ID, post.ID, "")
+	_, _, err := interactionService.CommentPost(user.ID, post.ID, "")
 
 	// Then: Comment creation succeeds (database allows empty text)
 	Expect(err).NotTo(HaveOccurred())
@@ -199,7 +205,8 @@ func TestInteractionService_CommentPostLongText(t *testing.T) {
 
 	likeRepo := postgresRepo.NewLikeRepository(containers.DB)
 	commentRepo := postgresRepo.NewCommentRepository(containers.DB)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo, containers.Cache)
+	postRepo := postgresRepo.NewPostRepository(containers.DB)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, containers.Cache)
 
 	// Given: User and post exist
 	user := createTestUser(t, containers.DB, "longcomment", "long@example.com")
@@ -212,7 +219,7 @@ func TestInteractionService_CommentPostLongText(t *testing.T) {
 	}
 
 	// When: User comments with long text
-	err := interactionService.CommentPost(user.ID, post.ID, longCommentText)
+	_, _, err := interactionService.CommentPost(user.ID, post.ID, longCommentText)
 
 	// Then: Comment is created successfully (if within DB limits)
 	if err != nil {
@@ -235,14 +242,15 @@ func TestInteractionService_CommentPostNonExistentPost(t *testing.T) {
 
 	likeRepo := postgresRepo.NewLikeRepository(containers.DB)
 	commentRepo := postgresRepo.NewCommentRepository(containers.DB)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo, containers.Cache)
+	postRepo := postgresRepo.NewPostRepository(containers.DB)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, containers.Cache)
 
 	// Given: User exists but post doesn't
 	user := createTestUser(t, containers.DB, "nonexistentcomment", "nonexistent@example.com")
 	nonExistentPostID := uint(99999)
 
 	// When: User tries to comment on non-existent post
-	err := interactionService.CommentPost(user.ID, nonExistentPostID, "This comment will fail")
+	_, _, err := interactionService.CommentPost(user.ID, nonExistentPostID, "This comment will fail")
 
 	// Then: Comment fails due to foreign key constraint
 	Expect(err).To(HaveOccurred())
@@ -257,7 +265,8 @@ func TestInteractionService_MultipleUsersLikeSamePost(t *testing.T) {
 
 	likeRepo := postgresRepo.NewLikeRepository(containers.DB)
 	commentRepo := postgresRepo.NewCommentRepository(containers.DB)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo, containers.Cache)
+	postRepo := postgresRepo.NewPostRepository(containers.DB)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, containers.Cache)
 
 	// Given: Multiple users and one post
 	user1 := createTestUser(t, containers.DB, "user1", "user1@example.com")
@@ -266,9 +275,9 @@ func TestInteractionService_MultipleUsersLikeSamePost(t *testing.T) {
 	post := createTestPost(t, containers.DB, user1.ID, "Popular Post", "This post will be liked by multiple users")
 
 	// When: Multiple users like the same post
-	err1 := interactionService.LikePost(user1.ID, post.ID)
-	err2 := interactionService.LikePost(user2.ID, post.ID)
-	err3 := interactionService.LikePost(user3.ID, post.ID)
+	_, _, err1 := interactionService.LikePost(user1.ID, post.ID)
+	_, _, err2 := interactionService.LikePost(user2.ID, post.ID)
+	_, _, err3 := interactionService.LikePost(user3.ID, post.ID)
 
 	// Then: All likes succeed
 	Expect(err1).NotTo(HaveOccurred())
@@ -294,7 +303,8 @@ func TestInteractionService_MultipleCommentsOnSamePost(t *testing.T) {
 
 	likeRepo := postgresRepo.NewLikeRepository(containers.DB)
 	commentRepo := postgresRepo.NewCommentRepository(containers.DB)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo, containers.Cache)
+	postRepo := postgresRepo.NewPostRepository(containers.DB)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, containers.Cache)
 
 	// Given: Multiple users and one post
 	user1 := createTestUser(t, containers.DB, "commenter1", "commenter1@example.com")
@@ -303,9 +313,9 @@ func TestInteractionService_MultipleCommentsOnSamePost(t *testing.T) {
 	post := createTestPost(t, containers.DB, user1.ID, "Discussion Post", "This post will have multiple comments")
 
 	// When: Multiple users comment on the same post
-	err1 := interactionService.CommentPost(user1.ID, post.ID, "First comment!")
-	err2 := interactionService.CommentPost(user2.ID, post.ID, "Second comment!")
-	err3 := interactionService.CommentPost(user3.ID, post.ID, "Third comment!")
+	_, _, err1 := interactionService.CommentPost(user1.ID, post.ID, "First comment!")
+	_, _, err2 := interactionService.CommentPost(user2.ID, post.ID, "Second comment!")
+	_, _, err3 := interactionService.CommentPost(user3.ID, post.ID, "Third comment!")
 
 	// Then: All comments succeed
 	Expect(err1).NotTo(HaveOccurred())

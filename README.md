@@ -1,6 +1,9 @@
 # Instagrano MVP
 
+[![CI/CD](https://github.com/rodolfodpk/instagrano/actions/workflows/ci.yml/badge.svg)](https://github.com/rodolfodpk/instagrano/actions/workflows/ci.yml)
 [![Test Coverage](https://img.shields.io/badge/coverage-81.9%25-brightgreen)](https://github.com/rodolfodpk/instagrano)
+[![Go Report Card](https://goreportcard.com/badge/github.com/rodolfodpk/instagrano)](https://goreportcard.com/report/github.com/rodolfodpk/instagrano)
+[![Dependabot](https://img.shields.io/badge/dependabot-enabled-025e8c?style=flat&logo=dependabot)](https://github.com/rodolfodpk/instagrano/security/dependabot)
 
 A mini Instagram API built with Go Fiber, PostgreSQL, Redis, LocalStack S3, Zap logging, Testcontainers, Gomega, Docker Compose, and JWT authentication.
 

@@ -9,8 +9,10 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 
 	"github.com/rodolfodpk/instagrano/internal/config"
+	"github.com/rodolfodpk/instagrano/internal/events"
 	"github.com/rodolfodpk/instagrano/internal/handler"
 	postgresRepo "github.com/rodolfodpk/instagrano/internal/repository/postgres"
 	"github.com/rodolfodpk/instagrano/internal/service"
@@ -26,7 +28,11 @@ func TestPostHandler_GetPost(t *testing.T) {
 	postRepo := postgresRepo.NewPostRepository(containers.DB)
 	mockStorage := NewMockMediaStorage()
 	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
-	postHandler := handler.NewPostHandler(postService)
+	
+	// Create event publisher and logger for handler
+	logger, _ := zap.NewProduction()
+	eventPublisher := events.NewPublisher(containers.Cache, logger)
+	postHandler := handler.NewPostHandler(postService, eventPublisher, logger)
 
 	// Given: A post exists
 	user := createTestUser(t, containers.DB, "getpostuser", "getpost@example.com")
@@ -61,7 +67,11 @@ func TestPostHandler_GetPostNotFound(t *testing.T) {
 	postRepo := postgresRepo.NewPostRepository(containers.DB)
 	mockStorage := NewMockMediaStorage()
 	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
-	postHandler := handler.NewPostHandler(postService)
+	
+	// Create event publisher and logger for handler
+	logger, _ := zap.NewProduction()
+	eventPublisher := events.NewPublisher(containers.Cache, logger)
+	postHandler := handler.NewPostHandler(postService, eventPublisher, logger)
 
 	// Create Fiber app
 	app := fiber.New()
@@ -86,7 +96,11 @@ func TestPostHandler_GetPostInvalidID(t *testing.T) {
 	postRepo := postgresRepo.NewPostRepository(containers.DB)
 	mockStorage := NewMockMediaStorage()
 	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
-	postHandler := handler.NewPostHandler(postService)
+	
+	// Create event publisher and logger for handler
+	logger, _ := zap.NewProduction()
+	eventPublisher := events.NewPublisher(containers.Cache, logger)
+	postHandler := handler.NewPostHandler(postService, eventPublisher, logger)
 
 	// Create Fiber app
 	app := fiber.New()
