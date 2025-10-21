@@ -1,4 +1,4 @@
-.PHONY: run test docker-up docker-down migrate clean stop start restart itest health swagger swagger-ui start-all
+.PHONY: run test docker-up docker-down migrate clean stop start restart itest health swagger swagger-ui start-all k6-install k6-auth k6-cache k6-posts k6-journey k6-all
 
 # Defaults (can be overridden)
 PORT ?= 8080
@@ -77,3 +77,33 @@ redis-cli:
 
 redis-flush:
 	docker-compose exec redis redis-cli FLUSHDB
+
+# K6 Performance Testing
+.PHONY: k6-install k6-auth k6-cache k6-posts k6-journey k6-all
+
+k6-install:
+	@echo "Installing K6..."
+	@which k6 || (echo "K6 not found. Please install K6:" && echo "  macOS: brew install k6" && echo "  Linux: https://k6.io/docs/getting-started/installation/" && exit 1)
+
+k6-auth:
+	@echo "Running K6 authentication load test..."
+	@k6 run tests/k6/scenarios/auth.js
+
+k6-cache:
+	@echo "Running K6 cache performance test..."
+	@k6 run tests/k6/scenarios/feed-cache.js
+
+k6-posts:
+	@echo "Running K6 post creation load test..."
+	@k6 run tests/k6/scenarios/posts.js
+
+k6-journey:
+	@echo "Running K6 full user journey test..."
+	@k6 run tests/k6/scenarios/user-journey.js
+
+k6-all: k6-install
+	@echo "Running all K6 performance tests..."
+	@k6 run tests/k6/scenarios/auth.js
+	@k6 run tests/k6/scenarios/feed-cache.js
+	@k6 run tests/k6/scenarios/posts.js
+	@k6 run tests/k6/scenarios/user-journey.js

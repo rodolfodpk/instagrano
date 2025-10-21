@@ -293,6 +293,57 @@ go tool cover -html=coverage.out
 - **Comprehensive**: Tests happy paths, error cases, and edge conditions
 - **Performance**: Tests caching behavior and performance characteristics
 
+## Performance Testing
+
+The project includes K6 load tests to verify API performance under load and validate Redis caching improvements.
+
+### K6 Test Scenarios
+
+**Authentication Load Test:**
+- Concurrent user registration and login
+- JWT token generation throughput
+- Authenticated endpoint access
+
+**Feed Cache Performance Test:**
+- Cold cache performance (database query)
+- Warm cache performance (Redis hit)
+- Validates 10x performance improvement
+
+**Post Creation Load Test:**
+- Concurrent post creation with file uploads
+- S3/LocalStack integration under load
+
+**Full User Journey Test:**
+- Complete flow: Register → Login → Create Post → View Feed → Like → Comment
+
+### Running K6 Tests
+
+```bash
+# Install K6 (if not already installed)
+make k6-install
+
+# Run all K6 tests
+make k6-all
+
+# Run specific test scenarios
+make k6-auth      # Authentication load test
+make k6-cache     # Feed cache performance test
+make k6-posts     # Post creation load test
+make k6-journey   # Full user journey test
+```
+
+### Performance Baselines
+
+Based on testing with Redis caching enabled:
+
+| Endpoint | Cold Cache | Warm Cache | Improvement |
+|----------|------------|------------|-------------|
+| GET /api/feed | ~200ms | ~20ms | 10x |
+| POST /api/auth/login | ~50ms | N/A | N/A |
+| POST /api/posts | ~300ms | N/A | N/A |
+
+For detailed K6 test documentation, see [tests/k6/README.md](tests/k6/README.md).
+
 ## API Documentation
 
 Interactive Swagger UI available at: http://localhost:8081/swagger/
