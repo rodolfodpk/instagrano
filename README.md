@@ -88,7 +88,7 @@ GET /api/feed?page=1&limit=50
 
 ## Frontend
 
-Open: http://localhost:3007/feed.html (after logging in at http://localhost:3007/)
+Open: http://localhost:8080/feed.html (after logging in at http://localhost:8080/)
 
 The frontend includes:
 - **Login/Registration**: Tabbed interface for user authentication
@@ -211,7 +211,8 @@ grep '"cache miss"' logs/app.log
 
 **Environment Variables:**
 ```bash
-PORT=3007                    # Server port
+PORT=8080                    # API server port
+SWAGGER_PORT=8081            # Swagger UI server port
 JWT_SECRET=your-secret-key   # JWT signing secret
 LOG_LEVEL=info              # Log level
 LOG_FORMAT=json             # Log format
@@ -291,6 +292,52 @@ go tool cover -html=coverage.out
 - **BDD Style**: Given-When-Then structure with Gomega assertions
 - **Comprehensive**: Tests happy paths, error cases, and edge conditions
 - **Performance**: Tests caching behavior and performance characteristics
+
+## API Documentation
+
+Interactive Swagger UI available at: http://localhost:8081/swagger/
+
+**Note:** The API runs on port 8080 and Swagger documentation runs on port 8081 for clean separation.
+
+### Endpoints
+
+**Authentication:**
+- POST /api/auth/register - Register new user
+- POST /api/auth/login - Login and get JWT token
+
+**Posts:**
+- POST /api/posts - Create post (multipart/form-data)
+- GET /api/posts/:id - Get post by ID
+
+**Feed:**
+- GET /api/feed - Get paginated feed (cursor-based)
+  - Query params: cursor (optional), limit (optional, default 20)
+
+**Interactions:**
+- POST /api/posts/:id/like - Like a post
+- POST /api/posts/:id/comment - Comment on post
+
+**System:**
+- GET /health - Health check
+
+### Swagger Generation
+
+```bash
+# Generate Swagger documentation
+make swagger
+
+# Start API server (port 8080)
+make start
+
+# Start Swagger UI server (port 8081) in another terminal
+make swagger-ui
+
+# Or start both together
+make start-all
+
+# Visit Swagger UI
+open http://localhost:8081/swagger/
+```
 
 ## CI/CD Pipeline
 

@@ -30,7 +30,7 @@ func Load() *Config {
 		S3Endpoint:      getEnv("S3_ENDPOINT", "http://localhost:4566"),
 		S3Bucket:        getEnv("S3_BUCKET", "instagrano-media"),
 		JWTSecret:       getEnv("JWT_SECRET", "dev-secret"),
-		Port:            getEnv("PORT", "3000"),
+		Port:            getEnv("PORT", "8080"),
 		LogLevel:        getEnv("LOG_LEVEL", "info"),
 		LogFormat:       getEnv("LOG_FORMAT", "json"),
 		DefaultPageSize: getEnvInt("DEFAULT_PAGE_SIZE", 20),

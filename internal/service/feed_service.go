@@ -142,35 +142,6 @@ func (s *FeedService) getFeedFromDatabase(limit int, cursor string) (*pagination
 	}, nil
 }
 
-// GetFeed maintains backward compatibility with page-based pagination
-func (s *FeedService) GetFeed(page, limit int) ([]*domain.Post, error) {
-	s.logger.Info("getting feed with page-based pagination",
-		zap.Int("page", page),
-		zap.Int("limit", limit),
-	)
-
-	offset := (page - 1) * limit
-	posts, err := s.postRepo.GetFeed(limit, offset)
-	if err != nil {
-		s.logger.Error("failed to get feed from repository", zap.Error(err))
-		return nil, err
-	}
-
-	for _, post := range posts {
-		post.Score = post.CalculateScore()
-	}
-
-	sort.Slice(posts, func(i, j int) bool {
-		return posts[i].Score > posts[j].Score
-	})
-
-	s.logger.Info("feed retrieved successfully",
-		zap.Int("posts_count", len(posts)),
-	)
-
-	return posts, nil
-}
-
 // convertPostsToInterface converts []*domain.Post to []interface{}
 func convertPostsToInterface(posts []*domain.Post) []interface{} {
 	result := make([]interface{}, len(posts))

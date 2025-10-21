@@ -24,6 +24,17 @@ func NewFeedHandler(feedService *service.FeedService, cfg *config.Config) *FeedH
 	}
 }
 
+// GetFeed godoc
+// @Summary      Get user feed
+// @Description  Retrieve paginated feed using cursor-based pagination
+// @Tags         feed
+// @Produce      json
+// @Security     BearerAuth
+// @Param        cursor  query     string  false  "Pagination cursor"
+// @Param        limit   query     int     false  "Number of posts (default 20, max 100)"
+// @Success      200  {object}  pagination.FeedResult
+// @Failure      500  {object}  object{error=string}
+// @Router       /feed [get]
 func (h *FeedHandler) GetFeed(c *fiber.Ctx) error {
 	// Always use cursor-based pagination (more efficient)
 	cursor := c.Query("cursor")
@@ -55,31 +66,4 @@ func (h *FeedHandler) getFeedWithCursor(c *fiber.Ctx, cursor string) error {
 	)
 
 	return c.JSON(result)
-}
-
-func (h *FeedHandler) getFeedWithPage(c *fiber.Ctx) error {
-	page := c.QueryInt("page", 1)
-	limitStr := c.Query("limit", strconv.Itoa(h.config.DefaultPageSize))
-	limit, err := strconv.Atoi(limitStr)
-	if err != nil || limit <= 0 || limit > h.config.MaxPageSize {
-		limit = h.config.DefaultPageSize
-	}
-
-	h.logger.Info("getting feed with page",
-		zap.Int("page", page),
-		zap.Int("limit", limit),
-	)
-
-	posts, err := h.feedService.GetFeed(page, limit)
-	if err != nil {
-		h.logger.Error("failed to get feed with page", zap.Error(err))
-		return c.Status(500).JSON(fiber.Map{"error": "failed to get feed"})
-	}
-
-	h.logger.Info("feed retrieved successfully",
-		zap.Int("posts_count", len(posts)),
-		zap.Int("page", page),
-	)
-
-	return c.JSON(fiber.Map{"posts": posts, "page": page, "limit": limit})
 }

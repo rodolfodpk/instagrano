@@ -1,9 +1,29 @@
+// @title           Instagrano API
+// @version         1.0
+// @description     A mini Instagram API with posts, feed, likes, and comments
+// @termsOfService  http://swagger.io/terms/
+
+// @contact.name   API Support
+// @contact.email  support@instagrano.com
+
+// @license.name  MIT
+// @license.url   http://opensource.org/licenses/MIT
+
+// @host      localhost:8080
+// @BasePath  /api
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token
+
 package main
 
 import (
 	"log"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/rodolfodpk/instagrano/internal/cache"
 	"github.com/rodolfodpk/instagrano/internal/config"
 	"github.com/rodolfodpk/instagrano/internal/handler"
@@ -87,12 +107,20 @@ func main() {
 
 	app := fiber.New()
 
+	// Add CORS middleware
+	app.Use(cors.New())
+
 	// Add request logging middleware
 	app.Use(middleware.RequestLogger(appLogger))
 
-	// Serve static files
-	app.Static("/", "./web/public")
-
+	// HealthCheck godoc
+	// @Summary      Health check
+	// @Description  Check API and dependencies health
+	// @Tags         system
+	// @Produce      json
+	// @Success      200  {object}  object{status=string,database=string,redis=string}
+	// @Failure      503  {object}  object{status=string,database=string,redis=string}
+	// @Router       /health [get]
 	app.Get("/health", func(c *fiber.Ctx) error {
 		// Check Redis
 		if err := redisCache.Ping(c.Context()); err != nil {
@@ -109,6 +137,9 @@ func main() {
 			"redis":    "connected",
 		})
 	})
+
+	// Serve static files
+	app.Static("/static", "./web/public")
 
 	// Routes
 	api := app.Group("/api")

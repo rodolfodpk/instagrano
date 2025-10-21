@@ -1,7 +1,8 @@
-.PHONY: run test docker-up docker-down migrate clean stop start restart itest health
+.PHONY: run test docker-up docker-down migrate clean stop start restart itest health swagger swagger-ui start-all
 
 # Defaults (can be overridden)
-PORT ?= 3007
+PORT ?= 8080
+SWAGGER_PORT ?= 8081
 JWT_SECRET ?= super-secret-key-for-testing
 
 run:
@@ -13,6 +14,18 @@ test:
 test-full:
 	go test -race -coverprofile=coverage.out -covermode=atomic ./tests/ -coverpkg=./...
 	go tool cover -func=coverage.out | tail -1
+
+swagger:
+	$(shell go env GOPATH)/bin/swag init -g cmd/api/main.go -o docs
+
+swagger-ui:
+	@echo "Starting Swagger UI on :$(SWAGGER_PORT)"
+	@SWAGGER_PORT=$(SWAGGER_PORT) go run cmd/swagger/main.go
+
+start-all: stop docker-up
+	@echo "Starting API on :$(PORT) and Swagger UI on :$(SWAGGER_PORT)"
+	@JWT_SECRET='$(JWT_SECRET)' PORT=$(PORT) go run cmd/api/main.go & \
+	SWAGGER_PORT=$(SWAGGER_PORT) go run cmd/swagger/main.go
 
 docker-up:
 	docker-compose up -d
@@ -42,7 +55,7 @@ stop:
 
 # Start server with env vars, after ensuring port is free and services are running
 start: stop docker-up
-	@echo "Starting server on :$(PORT) with JWT_SECRET set"
+	@echo "Starting API server on :$(PORT) with JWT_SECRET set"
 	@JWT_SECRET='$(JWT_SECRET)' PORT=$(PORT) go run cmd/api/main.go
 
 # Convenience restart target
