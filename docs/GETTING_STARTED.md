@@ -8,6 +8,15 @@ This guide will help you set up and run Instagrano locally for development.
 - Docker and Docker Compose
 - Make (optional, for convenience commands)
 
+## Environment Setup
+
+1. **Copy the environment template:**
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Edit `.env` file** with your preferred settings (optional - defaults work for development)
+
 ## Quick Setup
 
 1. **Start services:**
