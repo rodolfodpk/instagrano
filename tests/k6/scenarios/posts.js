@@ -45,17 +45,19 @@ export default function () {
   
   sleep(1);
   
-  // Create post with URL upload (using our new feature)
+  // Create post with file upload (like feed-cache.js)
   const postRes = http.post(
     `${config.apiUrl}/api/posts`,
     {
       title: `Load Test Post ${Date.now()}`,
       caption: `This is a load test post created at ${new Date().toISOString()}`,
-      media_url: 'https://via.placeholder.com/150.jpg', // Will be mapped to static image
+      media_type: 'image',
+      media: http.file('tests/k6/fixtures/test-image.png', 'test-image.png', 'image/png'),
     },
     { 
       headers: {
         'Authorization': `Bearer ${token}`,
+        // Remove Content-Type - let K6 auto-set multipart/form-data boundary
       }
     }
   );

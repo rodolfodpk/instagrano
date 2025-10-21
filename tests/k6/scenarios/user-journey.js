@@ -62,7 +62,12 @@ export default function () {
       media_type: 'image',
       media: http.file('tests/k6/fixtures/test-image.png', 'test-image.png', 'image/png'),
     },
-    { headers: authHeader(token) }
+    { 
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        // Remove Content-Type - let K6 auto-set multipart/form-data boundary
+      }
+    }
   );
   
   const postId = postRes.json('id');

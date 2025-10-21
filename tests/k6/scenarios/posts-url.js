@@ -42,17 +42,31 @@ export default function () {
   // Create post from URL
   const randomURL = TEST_IMAGE_URLS[Math.floor(Math.random() * TEST_IMAGE_URLS.length)];
   
+  // Create post from URL using manual multipart construction
+  const boundary = '----formdata-k6-' + Math.random().toString(36);
+  const formData = [
+    `--${boundary}`,
+    `Content-Disposition: form-data; name="title"`,
+    '',
+    `URL Post ${Date.now()}`,
+    `--${boundary}`,
+    `Content-Disposition: form-data; name="caption"`,
+    '',
+    'Created from external URL',
+    `--${boundary}`,
+    `Content-Disposition: form-data; name="media_url"`,
+    '',
+    randomURL,
+    `--${boundary}--`,
+  ].join('\r\n');
+  
   const postRes = http.post(
     `${config.apiUrl}/api/posts`,
-    {
-      title: `URL Post ${Date.now()}`,
-      caption: 'Created from external URL',
-      media_url: randomURL,
-    },
+    formData,
     { 
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'multipart/form-data',
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
       }
     }
   );

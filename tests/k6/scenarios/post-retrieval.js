@@ -31,12 +31,30 @@ export default function () {
   const token = loginRes.json('token');
   if (!token) return;
   
-  // Create a post
-  const postRes = http.post(`${config.apiUrl}/api/posts`, {
-    title: `Test Post ${Date.now()}`,
-    caption: 'Cache test',
-    media_url: 'https://via.placeholder.com/150.jpg',
-  }, { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'multipart/form-data' } });
+  // Create a post with manual multipart construction
+  const boundary = '----formdata-k6-' + Math.random().toString(36);
+  const formData = [
+    `--${boundary}`,
+    `Content-Disposition: form-data; name="title"`,
+    '',
+    `Test Post ${Date.now()}`,
+    `--${boundary}`,
+    `Content-Disposition: form-data; name="caption"`,
+    '',
+    'Cache test',
+    `--${boundary}`,
+    `Content-Disposition: form-data; name="media_url"`,
+    '',
+    'https://via.placeholder.com/150.jpg',
+    `--${boundary}--`,
+  ].join('\r\n');
+  
+  const postRes = http.post(`${config.apiUrl}/api/posts`, formData, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': `multipart/form-data; boundary=${boundary}`,
+    }
+  });
   
   const postID = postRes.json('id');
   if (!postID) return;
