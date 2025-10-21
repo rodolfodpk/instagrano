@@ -52,7 +52,7 @@
 
         <div x-show="posts.length > 0">
             <template x-for="post in posts" :key="post.id">
-                <div class="post">
+                <div class="post" :data-post-id="post.id">
                 <div class="post-header">Post #<span x-text="post.id"></span></div>
                 <div x-text="post.title"></div>
                 <div x-text="post.caption"></div>
@@ -104,6 +104,8 @@
                 caption: '',
                 mediaType: 'image'
             },
+            activeViews: {}, // Track active view sessions (postId -> started_at timestamp)
+            observer: null,
             
             async init() {
                 const token = localStorage.getItem('token');
@@ -112,6 +114,12 @@
                     return;
                 }
                 await this.loadFeed();
+                this.setupViewTracking();
+                
+                // End all active views when page unloads
+                window.addEventListener('beforeunload', () => {
+                    this.endAllActiveViews();
+                });
             },
             
             resetFeed() {
@@ -139,7 +147,7 @@
                     formData.append('media_type', this.newPost.mediaType);
                     formData.append('media', fileInput.files[0]);
                     
-                    const response = await fetch('http://localhost:3007/api/posts', {
+                    const response = await fetch('http://localhost:8080/api/posts', {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${token}`
@@ -180,8 +188,8 @@
                     
                     // Use cursor-based pagination with configurable page size
                     const url = this.nextCursor 
-                        ? `http://localhost:3007/api/feed?limit=${this.pageSize}&cursor=${this.nextCursor}`
-                        : `http://localhost:3007/api/feed?limit=${this.pageSize}`;
+                        ? `http://localhost:8080/api/feed?limit=${this.pageSize}&cursor=${this.nextCursor}`
+                        : `http://localhost:8080/api/feed?limit=${this.pageSize}`;
                     
                     const response = await fetch(url, {
                         headers: {'Authorization': `Bearer ${token}`}
@@ -204,6 +212,11 @@
                             this.hasMore = false;
                             this.nextCursor = '';
                         }
+                        
+                        // Re-observe posts for view tracking
+                        this.$nextTick(() => {
+                            this.observeNewPosts();
+                        });
                     } else {
                         this.error = 'Failed to load feed';
                     }
@@ -221,7 +234,7 @@
                     this.loadingMore = true;
                     const token = localStorage.getItem('token');
                     
-                    const url = `http://localhost:3007/api/feed?limit=${this.pageSize}&cursor=${this.nextCursor}`;
+                    const url = `http://localhost:8080/api/feed?limit=${this.pageSize}&cursor=${this.nextCursor}`;
                     const response = await fetch(url, {
                         headers: {'Authorization': `Bearer ${token}`}
                     });
@@ -231,6 +244,11 @@
                         this.posts = [...this.posts, ...(data.posts || [])];
                         this.hasMore = data.has_more;
                         this.nextCursor = data.next_cursor || '';
+                        
+                        // Re-observe new posts for view tracking
+                        this.$nextTick(() => {
+                            this.observeNewPosts();
+                        });
                     } else {
                         this.error = 'Failed to load more posts';
                     }
@@ -244,7 +262,7 @@
             async likePost(postId) {
                 try {
                     const token = localStorage.getItem('token');
-                        const response = await fetch(`http://localhost:3007/api/posts/${postId}/like`, {
+                        const response = await fetch(`http://localhost:8080/api/posts/${postId}/like`, {
                         method: 'POST',
                         headers: {'Authorization': `Bearer ${token}`}
                     });
@@ -265,7 +283,7 @@
             async addComment(postId) {
                 try {
                     const token = localStorage.getItem('token');
-                        const response = await fetch(`http://localhost:3007/api/posts/${postId}/comment`, {
+                        const response = await fetch(`http://localhost:8080/api/posts/${postId}/comment`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${token}`,
@@ -284,7 +302,106 @@
                 }
             },
             
+            observeNewPosts() {
+                // Observe new posts that aren't already being observed
+                if (this.observer) {
+                    document.querySelectorAll('.post:not([data-observed])').forEach(post => {
+                        this.observer.observe(post);
+                        post.setAttribute('data-observed', 'true');
+                    });
+                }
+            },
+            
+            setupViewTracking() {
+                // Setup Intersection Observer to track when posts enter/exit viewport
+                this.observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        const postId = parseInt(entry.target.dataset.postId);
+                        if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+                            // Post is 50%+ visible - start tracking after 1 second
+                            setTimeout(() => {
+                                if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+                                    this.startViewTracking(postId);
+                                }
+                            }, 1000);
+                        } else if (!entry.isIntersecting) {
+                            // Post left viewport - end tracking
+                            this.endViewTracking(postId);
+                        }
+                    });
+                }, {
+                    threshold: [0.5], // Trigger when 50% visible
+                    rootMargin: '0px'
+                });
+                
+                // Observe all post elements
+                this.$nextTick(() => {
+                    this.observeNewPosts();
+                });
+            },
+            
+            async startViewTracking(postId) {
+                if (this.activeViews[postId]) {
+                    return; // Already tracking this post
+                }
+                
+                try {
+                    const token = localStorage.getItem('token');
+                    const response = await fetch(`http://localhost:8080/api/posts/${postId}/view/start`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const viewData = await response.json();
+                        this.activeViews[postId] = viewData.started_at;
+                        console.log(`Started tracking view for post ${postId}`);
+                    }
+                } catch (e) {
+                    console.error('Failed to start view tracking:', e);
+                }
+            },
+            
+            async endViewTracking(postId) {
+                if (!this.activeViews[postId]) {
+                    return; // Not tracking this post
+                }
+                
+                try {
+                    const token = localStorage.getItem('token');
+                    const response = await fetch(`http://localhost:8080/api/posts/${postId}/view/end`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            started_at: this.activeViews[postId]
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        console.log(`Ended tracking view for post ${postId}`);
+                    }
+                } catch (e) {
+                    console.error('Failed to end view tracking:', e);
+                } finally {
+                    delete this.activeViews[postId];
+                }
+            },
+            
+            async endAllActiveViews() {
+                // End all active view sessions (for page unload)
+                const promises = Object.keys(this.activeViews).map(postId => 
+                    this.endViewTracking(parseInt(postId))
+                );
+                await Promise.allSettled(promises);
+            },
+            
             logout() {
+                this.endAllActiveViews();
                 localStorage.removeItem('token');
                 window.location.href = '/';
             }
