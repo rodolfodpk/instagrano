@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -40,9 +41,17 @@ type TestContainers struct {
 	Cache             cache.Cache
 }
 
-// setupSharedTestContainers creates containers that persist across all tests
-func setupSharedTestContainers() *TestContainers {
-	ctx := context.Background()
+// Global shared containers for Ginkgo
+var (
+	sharedContainers *TestContainers
+	ctx              context.Context
+	cancel           context.CancelFunc
+)
+
+// Ginkgo test suite setup
+var _ = BeforeSuite(func() {
+	// Create context with timeout for test setup
+	ctx, cancel = context.WithTimeout(context.Background(), 120*time.Second)
 
 	// Start PostgreSQL container
 	pgContainer, err := postgres.RunContainer(ctx,
@@ -56,21 +65,15 @@ func setupSharedTestContainers() *TestContainers {
 				WithStartupTimeout(30*time.Second),
 		),
 	)
-	if err != nil {
-		panic("failed to start PostgreSQL container: " + err.Error())
-	}
+	Expect(err).NotTo(HaveOccurred())
 
 	// Get PostgreSQL connection string
 	dbURL, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		panic("failed to get PostgreSQL connection string: " + err.Error())
-	}
+	Expect(err).NotTo(HaveOccurred())
 
 	// Connect to PostgreSQL
 	db, err := postgresRepo.Connect(dbURL)
-	if err != nil {
-		panic("failed to connect to PostgreSQL: " + err.Error())
-	}
+	Expect(err).NotTo(HaveOccurred())
 
 	// Run migrations
 	runSharedMigrations(db)
@@ -83,15 +86,11 @@ func setupSharedTestContainers() *TestContainers {
 				WithStartupTimeout(10*time.Second),
 		),
 	)
-	if err != nil {
-		panic("failed to start Redis container: " + err.Error())
-	}
+	Expect(err).NotTo(HaveOccurred())
 
 	// Get Redis connection string
 	redisAddr, err := redisContainer.ConnectionString(ctx)
-	if err != nil {
-		panic("failed to get Redis connection string: " + err.Error())
-	}
+	Expect(err).NotTo(HaveOccurred())
 
 	// Remove redis:// prefix if present
 	redisAddr = strings.TrimPrefix(redisAddr, "redis://")
@@ -99,36 +98,38 @@ func setupSharedTestContainers() *TestContainers {
 	// Create Redis cache client
 	logger, _ := zap.NewProduction()
 	redisCache, err := cache.NewRedisCache(redisAddr, "", 0, logger)
-	if err != nil {
-		panic("failed to create Redis cache: " + err.Error())
-	}
+	Expect(err).NotTo(HaveOccurred())
 
-	return &TestContainers{
+	sharedContainers = &TestContainers{
 		PostgresContainer: pgContainer,
 		RedisContainer:    redisContainer,
 		DB:                db,
 		Cache:             redisCache,
 	}
-}
+})
 
-// cleanupSharedTestContainers terminates containers at the end of all tests
-func cleanupSharedTestContainers(containers *TestContainers) {
-	if containers == nil {
-		return
-	}
+var _ = BeforeEach(func() {
+	// CRITICAL: Clean state between EVERY test
+	truncateAllTables(sharedContainers.DB)
+	sharedContainers.Cache.FlushAll(ctx)
+})
 
-	ctx := context.Background()
-
-	if containers.DB != nil {
-		containers.DB.Close()
+var _ = AfterSuite(func() {
+	if cancel != nil {
+		cancel()
 	}
-	if containers.PostgresContainer != nil {
-		containers.PostgresContainer.Terminate(ctx)
+	if sharedContainers != nil {
+		if sharedContainers.DB != nil {
+			sharedContainers.DB.Close()
+		}
+		if sharedContainers.PostgresContainer != nil {
+			sharedContainers.PostgresContainer.Terminate(context.Background())
+		}
+		if sharedContainers.RedisContainer != nil {
+			sharedContainers.RedisContainer.Terminate(context.Background())
+		}
 	}
-	if containers.RedisContainer != nil {
-		containers.RedisContainer.Terminate(ctx)
-	}
-}
+})
 
 // runSharedMigrations applies all SQL migrations (for shared containers)
 func runSharedMigrations(db *sql.DB) {
@@ -155,8 +156,7 @@ func runSharedMigrations(db *sql.DB) {
 }
 
 // truncateAllTables cleans all tables between tests
-func truncateAllTables(t *testing.T, db *sql.DB) {
-	RegisterTestingT(t)
+func truncateAllTables(db *sql.DB) {
 	ctx := context.Background()
 
 	// Truncate tables in order to respect foreign key constraints
@@ -194,14 +194,14 @@ func setupTestContainers(t *testing.T) (*TestContainers, func()) {
 
 	// Return shared containers with truncate cleanup
 	cleanup := func() {
-		truncateAllTables(t, sharedContainers.DB)
+		truncateAllTables(sharedContainers.DB)
 
 		// Flush Redis cache
 		if sharedContainers.Cache != nil {
 			ctx := context.Background()
 			if err := sharedContainers.Cache.FlushAll(ctx); err != nil {
 				// Log error but don't fail the test
-				t.Logf("Warning: failed to flush Redis cache: %v", err)
+				fmt.Printf("Warning: failed to flush Redis cache: %v\n", err)
 			}
 		}
 	}
@@ -232,18 +232,16 @@ func runMigrations(t *testing.T, db *sql.DB) {
 }
 
 // setupTestApp creates Fiber app with shared Testcontainers dependencies
-func setupTestApp(t *testing.T) (*fiber.App, *TestContainers, func()) {
-	RegisterTestingT(t)
-
+func setupTestApp() (*fiber.App, *TestContainers, func()) {
 	cleanup := func() {
-		truncateAllTables(t, sharedContainers.DB)
+		truncateAllTables(sharedContainers.DB)
 
 		// Flush Redis cache
 		if sharedContainers.Cache != nil {
 			ctx := context.Background()
 			if err := sharedContainers.Cache.FlushAll(ctx); err != nil {
 				// Log error but don't fail the test
-				t.Logf("Warning: failed to flush Redis cache: %v", err)
+				fmt.Printf("Warning: failed to flush Redis cache: %v\n", err)
 			}
 		}
 	}
@@ -305,9 +303,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *TestContainers, func()) {
 }
 
 // Helper functions for creating test data
-func createTestUser(t *testing.T, db *sql.DB, username, email string) *domain.User {
-	RegisterTestingT(t)
-
+func createTestUser(db *sql.DB, username, email string) *domain.User {
 	query := `INSERT INTO users (username, email, password, created_at, updated_at) 
 			  VALUES ($1, $2, $3, NOW(), NOW()) RETURNING id`
 
@@ -324,9 +320,7 @@ func createTestUser(t *testing.T, db *sql.DB, username, email string) *domain.Us
 	}
 }
 
-func createTestPost(t *testing.T, db *sql.DB, userID uint, title, caption string) *domain.Post {
-	RegisterTestingT(t)
-
+func createTestPost(db *sql.DB, userID uint, title, caption string) *domain.Post {
 	query := `INSERT INTO posts (user_id, title, caption, media_type, media_url, likes_count, comments_count, views_count, created_at, updated_at) 
 			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()) RETURNING id`
 
@@ -375,9 +369,7 @@ func createTestPostWithEngagement(t *testing.T, db *sql.DB, userID uint, title s
 }
 
 // registerAndLogin is a helper for integration tests
-func registerAndLogin(t *testing.T, app *fiber.App, username, email, password string) string {
-	RegisterTestingT(t)
-
+func registerAndLogin(app *fiber.App, username, email, password string) string {
 	// Register user
 	regData := map[string]string{
 		"username": username,
@@ -419,23 +411,21 @@ type SSEEvent struct {
 }
 
 // connectSSE creates an SSE connection and returns a channel for receiving events
-func connectSSE(t *testing.T, app *fiber.App, token string) (<-chan SSEEvent, func()) {
-	RegisterTestingT(t)
-	
+func connectSSE(app *fiber.App, token string) (<-chan SSEEvent, func()) {
 	eventCh := make(chan SSEEvent, 10)
 	done := make(chan bool)
-	
+
 	// Create SSE request
 	req := httptest.NewRequest("GET", "/api/events/stream?token="+token, nil)
-	
+
 	// Start SSE connection in goroutine
 	go func() {
 		defer close(eventCh)
-		
+
 		resp, err := app.Test(req, -1) // -1 means no timeout
 		Expect(err).NotTo(HaveOccurred())
 		Expect(resp.StatusCode).To(Equal(200))
-		
+
 		scanner := bufio.NewScanner(resp.Body)
 		for scanner.Scan() {
 			select {
@@ -449,7 +439,7 @@ func connectSSE(t *testing.T, app *fiber.App, token string) (<-chan SSEEvent, fu
 						dataLine := scanner.Text()
 						if strings.HasPrefix(dataLine, "data: ") {
 							data := strings.TrimPrefix(dataLine, "data: ")
-							
+
 							var eventData json.RawMessage
 							if err := json.Unmarshal([]byte(data), &eventData); err == nil {
 								eventCh <- SSEEvent{
@@ -463,33 +453,29 @@ func connectSSE(t *testing.T, app *fiber.App, token string) (<-chan SSEEvent, fu
 			}
 		}
 	}()
-	
+
 	// Return cleanup function
 	cleanup := func() {
 		close(done)
 	}
-	
+
 	return eventCh, cleanup
 }
 
 // waitForSSEEvent waits for a specific event type with timeout
-func waitForSSEEvent(t *testing.T, eventCh <-chan SSEEvent, eventType string, timeout time.Duration) SSEEvent {
-	RegisterTestingT(t)
-	
+func waitForSSEEvent(eventCh <-chan SSEEvent, eventType string, timeout time.Duration) SSEEvent {
 	select {
 	case event := <-eventCh:
-		Expect(event.Type).To(Equal(eventType))
+		Expect(event.Type).To(Equal(eventType), fmt.Sprintf("Expected event type %s, got %s", eventType, event.Type))
 		return event
 	case <-time.After(timeout):
-		t.Fatalf("timeout waiting for SSE event type: %s", eventType)
+		Fail(fmt.Sprintf("timeout waiting for SSE event type: %s", eventType))
 		return SSEEvent{}
 	}
 }
 
 // parseSSEEventData parses SSE event data into the expected Event struct
-func parseSSEEventData(t *testing.T, data json.RawMessage) events.Event {
-	RegisterTestingT(t)
-	
+func parseSSEEventData(data json.RawMessage) events.Event {
 	var event events.Event
 	err := json.Unmarshal(data, &event)
 	Expect(err).NotTo(HaveOccurred())
@@ -497,61 +483,55 @@ func parseSSEEventData(t *testing.T, data json.RawMessage) events.Event {
 }
 
 // createTestPostWithSSE creates a post and returns the post data for SSE testing
-func createTestPostWithSSE(t *testing.T, app *fiber.App, token, title, caption string) map[string]interface{} {
-	RegisterTestingT(t)
-	
+func createTestPostWithSSE(app *fiber.App, token, title, caption string) map[string]interface{} {
 	// Create multipart form data
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
-	
+
 	writer.WriteField("title", title)
 	writer.WriteField("caption", caption)
 	writer.WriteField("media_url", "https://via.placeholder.com/300x200/FF0000/FFFFFF?text=Test")
-	
+
 	writer.Close()
-	
+
 	req := httptest.NewRequest("POST", "/api/posts", &buf)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.Header.Set("Authorization", "Bearer "+token)
-	
+
 	resp, err := app.Test(req)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(resp.StatusCode).To(Equal(201))
-	
+
 	var postData map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&postData)
 	return postData
 }
 
 // likeTestPostWithSSE likes a post and returns the response for SSE testing
-func likeTestPostWithSSE(t *testing.T, app *fiber.App, token string, postID uint) map[string]interface{} {
-	RegisterTestingT(t)
-	
+func likeTestPostWithSSE(app *fiber.App, token string, postID uint) map[string]interface{} {
 	req := httptest.NewRequest("POST", fmt.Sprintf("/api/posts/%d/like", postID), nil)
 	req.Header.Set("Authorization", "Bearer "+token)
-	
+
 	resp, err := app.Test(req)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(resp.StatusCode).To(Equal(200))
-	
+
 	var result map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&result)
 	return result
 }
 
 // commentTestPostWithSSE comments on a post and returns the response for SSE testing
-func commentTestPostWithSSE(t *testing.T, app *fiber.App, token string, postID uint, text string) map[string]interface{} {
-	RegisterTestingT(t)
-	
+func commentTestPostWithSSE(app *fiber.App, token string, postID uint, text string) map[string]interface{} {
 	commentData := map[string]string{"text": text}
 	req := httptest.NewRequest("POST", fmt.Sprintf("/api/posts/%d/comment", postID), strings.NewReader(marshalJSON(commentData)))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
-	
+
 	resp, err := app.Test(req)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(resp.StatusCode).To(Equal(200))
-	
+
 	var result map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&result)
 	return result
@@ -560,6 +540,14 @@ func commentTestPostWithSSE(t *testing.T, app *fiber.App, token string, postID u
 // marshalJSON is a helper to marshal data to JSON
 func marshalJSON(data interface{}) string {
 	jsonData, err := json.Marshal(data)
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		panic(fmt.Sprintf("Failed to marshal JSON: %v", err))
+	}
 	return string(jsonData)
+}
+
+func createTestJWT(userID uint) (string, error) {
+	userRepo := postgresRepo.NewUserRepository(sharedContainers.DB)
+	authService := service.NewAuthService(userRepo, "test-secret")
+	return authService.GenerateJWT(userID)
 }

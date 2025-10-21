@@ -1,21 +1,12 @@
 package tests
 
 import (
-	"os"
 	"testing"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-var sharedContainers *TestContainers
-
-func TestMain(m *testing.M) {
-	// Setup: Create containers once
-	sharedContainers = setupSharedTestContainers()
-
-	// Run all tests
-	exitCode := m.Run()
-
-	// Teardown: Cleanup containers
-	cleanupSharedTestContainers(sharedContainers)
-
-	os.Exit(exitCode)
+func TestInstagrano(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Instagrano Test Suite")
 }

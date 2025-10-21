@@ -46,6 +46,9 @@ func (h *SSEHandler) Stream(c *fiber.Ctx) error {
 	// Validate JWT token
 	userID, err := h.validateJWT(token)
 	if err != nil {
+		h.logger.Warn("SSE token validation failed", 
+			zap.Error(err),
+			zap.String("token", token[:min(len(token), 20)]+"..."))
 		return c.Status(401).JSON(fiber.Map{"error": "invalid token"})
 	}
 
@@ -64,7 +67,7 @@ func (h *SSEHandler) Stream(c *fiber.Ctx) error {
 	defer cancel()
 
 	// Subscribe to Redis events channel
-	eventCh, err := h.cache.Subscribe(ctx, events.RedisChannel)
+	eventCh, err := h.cache.Subscribe(ctx, events.EventChannel)
 	if err != nil {
 		h.logger.Error("failed to subscribe to events channel",
 			zap.Error(err),
@@ -168,4 +171,12 @@ func (h *SSEHandler) validateJWT(tokenString string) (uint, error) {
 	}
 
 	return 0, fmt.Errorf("invalid token")
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

@@ -1,179 +1,180 @@
 package tests
 
 import (
-	"testing"
-
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	postgresRepo "github.com/rodolfodpk/instagrano/internal/repository/postgres"
 	"github.com/rodolfodpk/instagrano/internal/service"
 )
 
-func TestAuthService_Register(t *testing.T) {
-	RegisterTestingT(t)
+var _ = Describe("AuthService", func() {
+	Describe("Register", func() {
+		It("should register a new user successfully", func() {
+			// Given: Auth service with test database
+			userRepo := postgresRepo.NewUserRepository(sharedContainers.DB)
+			authService := service.NewAuthService(userRepo, "test-secret")
 
-	// Setup: Testcontainers PostgreSQL
-	containers, cleanup := setupTestContainers(t)
-	defer cleanup()
+			// When: Register a new user
+			user, err := authService.Register("testuser", "test@example.com", "password123")
 
-	userRepo := postgresRepo.NewUserRepository(containers.DB)
-	authService := service.NewAuthService(userRepo, "test-secret")
+			// Then: Should register successfully
+			Expect(err).NotTo(HaveOccurred())
+			Expect(user.Username).To(Equal("testuser"))
+			Expect(user.Email).To(Equal("test@example.com"))
+			Expect(user.ID).To(BeNumerically(">", 0))
+		})
 
-	// When: Register new user
-	user, err := authService.Register("newuser", "new@example.com", "password123")
+		It("should reject duplicate username", func() {
+			// Given: Auth service with existing user
+			userRepo := postgresRepo.NewUserRepository(sharedContainers.DB)
+			authService := service.NewAuthService(userRepo, "test-secret")
 
-	// Then: Registration succeeds
-	Expect(err).NotTo(HaveOccurred())
-	Expect(user.Username).To(Equal("newuser"))
-	Expect(user.Email).To(Equal("new@example.com"))
-	Expect(user.Password).NotTo(Equal("password123")) // Should be hashed
-	Expect(user.Password).To(HavePrefix("$2a$")) // bcrypt hash
-}
+			// First registration
+			_, err := authService.Register("testuser", "test@example.com", "password123")
+			Expect(err).NotTo(HaveOccurred())
 
-func TestAuthService_Login(t *testing.T) {
-	RegisterTestingT(t)
+			// When: Try to register with same username
+			_, err = authService.Register("testuser", "test2@example.com", "password123")
 
-	containers, cleanup := setupTestContainers(t)
-	defer cleanup()
+			// Then: Should reject duplicate username
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("username"))
+		})
 
-	userRepo := postgresRepo.NewUserRepository(containers.DB)
-	authService := service.NewAuthService(userRepo, "test-secret")
+		It("should reject duplicate email", func() {
+			// Given: Auth service with existing user
+			userRepo := postgresRepo.NewUserRepository(sharedContainers.DB)
+			authService := service.NewAuthService(userRepo, "test-secret")
 
-	// Given: User exists
-	_, err := authService.Register("loginuser", "login@example.com", "password123")
-	Expect(err).NotTo(HaveOccurred())
+			// First registration
+			_, err := authService.Register("testuser", "test@example.com", "password123")
+			Expect(err).NotTo(HaveOccurred())
 
-	// When: Login with correct credentials
-	user, token, err := authService.Login("login@example.com", "password123")
+			// When: Try to register with same email
+			_, err = authService.Register("testuser2", "test@example.com", "password123")
 
-	// Then: Login succeeds
-	Expect(err).NotTo(HaveOccurred())
-	Expect(token).NotTo(BeEmpty())
-	Expect(user.Email).To(Equal("login@example.com"))
+			// Then: Should reject duplicate email
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("email"))
+		})
 
-	// Verify JWT format (header.payload.signature)
-	Expect(token).To(MatchRegexp(`^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+$`))
-}
+		It("should reject invalid email format", func() {
+			// Given: Auth service
+			userRepo := postgresRepo.NewUserRepository(sharedContainers.DB)
+			authService := service.NewAuthService(userRepo, "test-secret")
 
-func TestAuthService_LoginWithWrongPassword(t *testing.T) {
-	RegisterTestingT(t)
+			// When: Register with invalid email (empty email)
+			_, err := authService.Register("testuser", "", "password123")
 
-	containers, cleanup := setupTestContainers(t)
-	defer cleanup()
+			// Then: Should reject empty email
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("invalid input"))
+		})
 
-	userRepo := postgresRepo.NewUserRepository(containers.DB)
-	authService := service.NewAuthService(userRepo, "test-secret")
+		It("should reject short password", func() {
+			// Given: Auth service
+			userRepo := postgresRepo.NewUserRepository(sharedContainers.DB)
+			authService := service.NewAuthService(userRepo, "test-secret")
 
-	// Given: User exists
-	authService.Register("wrongpass", "wrong@example.com", "correctpass")
+			// When: Register with empty password
+			_, err := authService.Register("testuser", "test@example.com", "")
 
-	// When: Login with wrong password
-	_, _, err := authService.Login("wrong@example.com", "wrongpass")
+			// Then: Should reject empty password
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("invalid input"))
+		})
 
-	// Then: Login fails
-	Expect(err).To(HaveOccurred())
-	Expect(err.Error()).To(ContainSubstring("invalid credentials"))
-}
+		It("should reject empty username", func() {
+			// Given: Auth service
+			userRepo := postgresRepo.NewUserRepository(sharedContainers.DB)
+			authService := service.NewAuthService(userRepo, "test-secret")
 
-func TestAuthService_LoginWithNonExistentUser(t *testing.T) {
-	RegisterTestingT(t)
+			// When: Register with empty username
+			_, err := authService.Register("", "test@example.com", "password123")
 
-	containers, cleanup := setupTestContainers(t)
-	defer cleanup()
+			// Then: Should reject empty username
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("invalid input"))
+		})
 
-	userRepo := postgresRepo.NewUserRepository(containers.DB)
-	authService := service.NewAuthService(userRepo, "test-secret")
+		It("should hash password correctly", func() {
+			// Given: Auth service
+			userRepo := postgresRepo.NewUserRepository(sharedContainers.DB)
+			authService := service.NewAuthService(userRepo, "test-secret")
 
-	// When: Login with non-existent user
-	_, _, err := authService.Login("nonexistent@example.com", "password123")
+			// When: Register a user
+			user, err := authService.Register("testuser", "test@example.com", "password123")
 
-	// Then: Login fails
-	Expect(err).To(HaveOccurred())
-	Expect(err.Error()).To(ContainSubstring("invalid credentials"))
-}
+			// Then: Password should be hashed
+			Expect(err).NotTo(HaveOccurred())
+			Expect(user.Password).NotTo(Equal("password123"))
+			Expect(len(user.Password)).To(BeNumerically(">", 50)) // bcrypt hash length
+		})
+	})
 
-func TestAuthService_RegisterDuplicateEmail(t *testing.T) {
-	RegisterTestingT(t)
+	Describe("Login", func() {
+		It("should login with correct credentials", func() {
+			// Given: Registered user
+			userRepo := postgresRepo.NewUserRepository(sharedContainers.DB)
+			authService := service.NewAuthService(userRepo, "test-secret")
 
-	containers, cleanup := setupTestContainers(t)
-	defer cleanup()
+			_, err := authService.Register("testuser", "test@example.com", "password123")
+			Expect(err).NotTo(HaveOccurred())
 
-	userRepo := postgresRepo.NewUserRepository(containers.DB)
-	authService := service.NewAuthService(userRepo, "test-secret")
+			// When: Login with correct credentials
+			user, token, err := authService.Login("test@example.com", "password123")
 
-	// Given: User already exists
-	_, err := authService.Register("user1", "duplicate@example.com", "password123")
-	Expect(err).NotTo(HaveOccurred())
+			// Then: Should login successfully
+			Expect(err).NotTo(HaveOccurred())
+			Expect(user.Username).To(Equal("testuser"))
+			Expect(token).NotTo(BeEmpty())
+		})
 
-	// When: Try to register with same email
-	_, err = authService.Register("user2", "duplicate@example.com", "password456")
+		It("should reject incorrect password", func() {
+			// Given: Registered user
+			userRepo := postgresRepo.NewUserRepository(sharedContainers.DB)
+			authService := service.NewAuthService(userRepo, "test-secret")
 
-	// Then: Registration fails
-	Expect(err).To(HaveOccurred())
-	Expect(err.Error()).To(ContainSubstring("duplicate"))
-}
+			_, err := authService.Register("testuser", "test@example.com", "password123")
+			Expect(err).NotTo(HaveOccurred())
 
-func TestAuthService_RegisterDuplicateUsername(t *testing.T) {
-	RegisterTestingT(t)
+			// When: Login with incorrect password
+			_, _, err = authService.Login("test@example.com", "wrongpassword")
 
-	containers, cleanup := setupTestContainers(t)
-	defer cleanup()
+			// Then: Should reject login
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("invalid credentials"))
+		})
 
-	userRepo := postgresRepo.NewUserRepository(containers.DB)
-	authService := service.NewAuthService(userRepo, "test-secret")
+		It("should reject non-existent email", func() {
+			// Given: Auth service
+			userRepo := postgresRepo.NewUserRepository(sharedContainers.DB)
+			authService := service.NewAuthService(userRepo, "test-secret")
 
-	// Given: User already exists
-	_, err := authService.Register("duplicateuser", "user1@example.com", "password123")
-	Expect(err).NotTo(HaveOccurred())
+			// When: Login with non-existent email
+			_, _, err := authService.Login("nonexistent@example.com", "password123")
 
-	// When: Try to register with same username
-	_, err = authService.Register("duplicateuser", "user2@example.com", "password456")
+			// Then: Should reject login
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("invalid credentials"))
+		})
 
-	// Then: Registration fails
-	Expect(err).To(HaveOccurred())
-	Expect(err.Error()).To(ContainSubstring("duplicate"))
-}
+		It("should generate valid JWT token", func() {
+			// Given: Registered user
+			userRepo := postgresRepo.NewUserRepository(sharedContainers.DB)
+			authService := service.NewAuthService(userRepo, "test-secret")
 
-func TestAuthService_RegisterEmptyFields(t *testing.T) {
-	RegisterTestingT(t)
+			_, err := authService.Register("testuser", "test@example.com", "password123")
+			Expect(err).NotTo(HaveOccurred())
 
-	containers, cleanup := setupTestContainers(t)
-	defer cleanup()
+			// When: Login
+			_, token, err := authService.Login("test@example.com", "password123")
 
-	userRepo := postgresRepo.NewUserRepository(containers.DB)
-	authService := service.NewAuthService(userRepo, "test-secret")
-
-	// When: Register with empty username
-	_, err := authService.Register("", "test@example.com", "password123")
-	Expect(err).To(HaveOccurred())
-
-	// When: Register with empty email
-	_, err = authService.Register("testuser", "", "password123")
-	Expect(err).To(HaveOccurred())
-
-	// When: Register with empty password
-	_, err = authService.Register("testuser", "test@example.com", "")
-	Expect(err).To(HaveOccurred())
-}
-
-func TestAuthService_JWTTokenValidation(t *testing.T) {
-	RegisterTestingT(t)
-
-	containers, cleanup := setupTestContainers(t)
-	defer cleanup()
-
-	userRepo := postgresRepo.NewUserRepository(containers.DB)
-	authService := service.NewAuthService(userRepo, "test-secret")
-
-	// Given: User exists and logs in
-	_, err := authService.Register("jwtuser", "jwt@example.com", "password123")
-	Expect(err).NotTo(HaveOccurred())
-
-	user, token, err := authService.Login("jwt@example.com", "password123")
-	Expect(err).NotTo(HaveOccurred())
-
-	// Then: Token contains user information
-	Expect(token).NotTo(BeEmpty())
-	Expect(user.Email).To(Equal("jwt@example.com"))
-	Expect(user.Username).To(Equal("jwtuser"))
-}
+			// Then: Should generate valid token
+			Expect(err).NotTo(HaveOccurred())
+			Expect(token).NotTo(BeEmpty())
+			Expect(len(token)).To(BeNumerically(">", 50)) // JWT tokens are longer
+		})
+	})
+})

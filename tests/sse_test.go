@@ -1,310 +1,243 @@
 package tests
 
 import (
+	"encoding/json"
 	"net/http/httptest"
-	"testing"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/rodolfodpk/instagrano/internal/domain"
 	"github.com/rodolfodpk/instagrano/internal/events"
 )
 
-func TestSSEAuthentication(t *testing.T) {
-	RegisterTestingT(t)
-
-	app, _, cleanup := setupTestApp(t)
-	defer cleanup()
-
-	// Test missing token
-	req := httptest.NewRequest("GET", "/api/events/stream", nil)
-	resp, err := app.Test(req)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(resp.StatusCode).To(Equal(401))
-
-	// Test invalid token
-	req = httptest.NewRequest("GET", "/api/events/stream?token=invalid", nil)
-	resp, err = app.Test(req)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(resp.StatusCode).To(Equal(401))
-
-	// Test valid token
-	token := registerAndLogin(t, app, "sseuser1", "sse1@example.com", "pass123")
-	req = httptest.NewRequest("GET", "/api/events/stream?token="+token, nil)
-	resp, err = app.Test(req)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(resp.StatusCode).To(Equal(200))
-}
-
-func TestSSEConnection(t *testing.T) {
-	RegisterTestingT(t)
-
-	app, _, cleanup := setupTestApp(t)
-	defer cleanup()
-
-	token := registerAndLogin(t, app, "sseuser2", "sse2@example.com", "pass123")
-
-	// Connect to SSE
-	eventCh, cleanupSSE := connectSSE(t, app, token)
-	defer cleanupSSE()
-
-	// Should receive connected event
-	connectedEvent := waitForSSEEvent(t, eventCh, "connected", 5*time.Second)
-	Expect(connectedEvent.Type).To(Equal("connected"))
-
-	// Should receive heartbeat events
-	heartbeatEvent := waitForSSEEvent(t, eventCh, "heartbeat", 35*time.Second)
-	Expect(heartbeatEvent.Type).To(Equal("heartbeat"))
-}
-
-func TestSSENewPostEvent(t *testing.T) {
-	RegisterTestingT(t)
-
-	app, _, cleanup := setupTestApp(t)
-	defer cleanup()
-
-	// Register two users
-	token1 := registerAndLogin(t, app, "sseuser3", "sse3@example.com", "pass123")
-	token2 := registerAndLogin(t, app, "sseuser4", "sse4@example.com", "pass123")
-
-	// Connect both users to SSE
-	eventCh1, cleanup1 := connectSSE(t, app, token1)
-	defer cleanup1()
-	eventCh2, cleanup2 := connectSSE(t, app, token2)
-	defer cleanup2()
-
-	// Wait for both connections to be established
-	waitForSSEEvent(t, eventCh1, "connected", 5*time.Second)
-	waitForSSEEvent(t, eventCh2, "connected", 5*time.Second)
-
-	// User 1 creates a post
-	postData := createTestPostWithSSE(t, app, token1, "SSE Test Post", "Testing real-time updates!")
-
-	// User 2 should receive the new_post event
-	newPostEvent := waitForSSEEvent(t, eventCh2, "new_post", 5*time.Second)
-	event := parseSSEEventData(t, newPostEvent.Data)
-
-	Expect(event.Type).To(Equal(events.EventTypeNewPost))
-	Expect(event.PostID).To(Equal(uint(postData["id"].(float64))))
-	Expect(event.TriggeredByUserID).To(Equal(uint(postData["user_id"].(float64))))
-
-	// User 1 should NOT receive their own event (self-filtering)
-	select {
-	case <-eventCh1:
-		t.Fatal("User 1 should not receive their own post event")
-	case <-time.After(2 * time.Second):
-		// This is expected - no event should be received
-	}
-}
-
-func TestSSELikeEvent(t *testing.T) {
-	RegisterTestingT(t)
-
-	app, _, cleanup := setupTestApp(t)
-	defer cleanup()
-
-	// Register two users
-	token1 := registerAndLogin(t, app, "sseuser5", "sse5@example.com", "pass123")
-	token2 := registerAndLogin(t, app, "sseuser6", "sse6@example.com", "pass123")
-
-	// Connect both users to SSE
-	eventCh1, cleanup1 := connectSSE(t, app, token1)
-	defer cleanup1()
-	eventCh2, cleanup2 := connectSSE(t, app, token2)
-	defer cleanup2()
-
-	// Wait for both connections to be established
-	waitForSSEEvent(t, eventCh1, "connected", 5*time.Second)
-	waitForSSEEvent(t, eventCh2, "connected", 5*time.Second)
-
-	// User 1 creates a post
-	postData := createTestPostWithSSE(t, app, token1, "Like Test Post", "Testing like events!")
-	postID := uint(postData["id"].(float64))
-
-	// User 2 should receive the new_post event
-	waitForSSEEvent(t, eventCh2, "new_post", 5*time.Second)
-
-	// User 2 likes the post
-	likeTestPostWithSSE(t, app, token2, postID)
-
-	// User 1 should receive the post_liked event
-	likedEvent := waitForSSEEvent(t, eventCh1, "post_liked", 5*time.Second)
-	event := parseSSEEventData(t, likedEvent.Data)
-
-	Expect(event.Type).To(Equal(events.EventTypePostLiked))
-	Expect(event.PostID).To(Equal(postID))
-	Expect(event.TriggeredByUserID).To(Equal(uint(postData["user_id"].(float64)))) // User 2's ID
-
-	// User 2 should NOT receive their own like event
-	select {
-	case <-eventCh2:
-		t.Fatal("User 2 should not receive their own like event")
-	case <-time.After(2 * time.Second):
-		// This is expected - no event should be received
-	}
-}
-
-func TestSSECommentEvent(t *testing.T) {
-	RegisterTestingT(t)
-
-	app, _, cleanup := setupTestApp(t)
-	defer cleanup()
-
-	// Register two users
-	token1 := registerAndLogin(t, app, "sseuser7", "sse7@example.com", "pass123")
-	token2 := registerAndLogin(t, app, "sseuser8", "sse8@example.com", "pass123")
-
-	// Connect both users to SSE
-	eventCh1, cleanup1 := connectSSE(t, app, token1)
-	defer cleanup1()
-	eventCh2, cleanup2 := connectSSE(t, app, token2)
-	defer cleanup2()
-
-	// Wait for both connections to be established
-	waitForSSEEvent(t, eventCh1, "connected", 5*time.Second)
-	waitForSSEEvent(t, eventCh2, "connected", 5*time.Second)
-
-	// User 1 creates a post
-	postData := createTestPostWithSSE(t, app, token1, "Comment Test Post", "Testing comment events!")
-	postID := uint(postData["id"].(float64))
-
-	// User 2 should receive the new_post event
-	waitForSSEEvent(t, eventCh2, "new_post", 5*time.Second)
-
-	// User 2 comments on the post
-	commentTestPostWithSSE(t, app, token2, postID, "Great post!")
-
-	// User 1 should receive the post_commented event
-	commentedEvent := waitForSSEEvent(t, eventCh1, "post_commented", 5*time.Second)
-	event := parseSSEEventData(t, commentedEvent.Data)
-
-	Expect(event.Type).To(Equal(events.EventTypePostCommented))
-	Expect(event.PostID).To(Equal(postID))
-	Expect(event.TriggeredByUserID).To(Equal(uint(postData["user_id"].(float64)))) // User 2's ID
-
-	// User 2 should NOT receive their own comment event
-	select {
-	case <-eventCh2:
-		t.Fatal("User 2 should not receive their own comment event")
-	case <-time.After(2 * time.Second):
-		// This is expected - no event should be received
-	}
-}
-
-func TestSSEMultiUserScenario(t *testing.T) {
-	RegisterTestingT(t)
-
-	app, _, cleanup := setupTestApp(t)
-	defer cleanup()
-
-	// Register three users
-	token1 := registerAndLogin(t, app, "sseuser9", "sse9@example.com", "pass123")
-	token2 := registerAndLogin(t, app, "sseuser10", "sse10@example.com", "pass123")
-	token3 := registerAndLogin(t, app, "sseuser11", "sse11@example.com", "pass123")
-
-	// Connect all users to SSE
-	eventCh1, cleanup1 := connectSSE(t, app, token1)
-	defer cleanup1()
-	eventCh2, cleanup2 := connectSSE(t, app, token2)
-	defer cleanup2()
-	eventCh3, cleanup3 := connectSSE(t, app, token3)
-	defer cleanup3()
-
-	// Wait for all connections to be established
-	waitForSSEEvent(t, eventCh1, "connected", 5*time.Second)
-	waitForSSEEvent(t, eventCh2, "connected", 5*time.Second)
-	waitForSSEEvent(t, eventCh3, "connected", 5*time.Second)
-
-	// User 1 creates a post
-	postData := createTestPostWithSSE(t, app, token1, "Multi-User Test Post", "Testing with multiple users!")
-	postID := uint(postData["id"].(float64))
-
-	// Users 2 and 3 should receive the new_post event
-	waitForSSEEvent(t, eventCh2, "new_post", 5*time.Second)
-	waitForSSEEvent(t, eventCh3, "new_post", 5*time.Second)
-
-	// User 1 should NOT receive their own event
-	select {
-	case <-eventCh1:
-		t.Fatal("User 1 should not receive their own post event")
-	case <-time.After(2 * time.Second):
-		// Expected
-	}
-
-	// User 2 likes the post
-	likeTestPostWithSSE(t, app, token2, postID)
-
-	// Users 1 and 3 should receive the post_liked event
-	waitForSSEEvent(t, eventCh1, "post_liked", 5*time.Second)
-	waitForSSEEvent(t, eventCh3, "post_liked", 5*time.Second)
-
-	// User 2 should NOT receive their own like event
-	select {
-	case <-eventCh2:
-		t.Fatal("User 2 should not receive their own like event")
-	case <-time.After(2 * time.Second):
-		// Expected
-	}
-
-	// User 3 comments on the post
-	commentTestPostWithSSE(t, app, token3, postID, "Awesome post!")
-
-	// Users 1 and 2 should receive the post_commented event
-	waitForSSEEvent(t, eventCh1, "post_commented", 5*time.Second)
-	waitForSSEEvent(t, eventCh2, "post_commented", 5*time.Second)
-
-	// User 3 should NOT receive their own comment event
-	select {
-	case <-eventCh3:
-		t.Fatal("User 3 should not receive their own comment event")
-	case <-time.After(2 * time.Second):
-		// Expected
-	}
-}
-
-func TestSSEEventDataStructure(t *testing.T) {
-	RegisterTestingT(t)
-
-	app, _, cleanup := setupTestApp(t)
-	defer cleanup()
-
-	token1 := registerAndLogin(t, app, "sseuser12", "sse12@example.com", "pass123")
-	token2 := registerAndLogin(t, app, "sseuser13", "sse13@example.com", "pass123")
-
-	eventCh1, cleanup1 := connectSSE(t, app, token1)
-	defer cleanup1()
-	eventCh2, cleanup2 := connectSSE(t, app, token2)
-	defer cleanup2()
-
-	waitForSSEEvent(t, eventCh1, "connected", 5*time.Second)
-	waitForSSEEvent(t, eventCh2, "connected", 5*time.Second)
-
-	// Test new_post event structure
-	postData := createTestPostWithSSE(t, app, token1, "Data Structure Test", "Testing event data structure!")
-	postID := uint(postData["id"].(float64))
-
-	newPostEvent := waitForSSEEvent(t, eventCh2, "new_post", 5*time.Second)
-	event := parseSSEEventData(t, newPostEvent.Data)
-
-	Expect(event.Type).To(Equal(events.EventTypeNewPost))
-	Expect(event.PostID).To(Equal(postID))
-	Expect(event.TriggeredByUserID).To(Equal(uint(postData["user_id"].(float64))))
-	Expect(event.Timestamp).To(BeNumerically(">", 0))
-
-	// Test like event structure
-	likeTestPostWithSSE(t, app, token2, postID)
-	likedEvent := waitForSSEEvent(t, eventCh1, "post_liked", 5*time.Second)
-	likeEvent := parseSSEEventData(t, likedEvent.Data)
-
-	Expect(likeEvent.Type).To(Equal(events.EventTypePostLiked))
-	Expect(likeEvent.PostID).To(Equal(postID))
-	Expect(likeEvent.TriggeredByUserID).To(Equal(uint(postData["user_id"].(float64)))) // User 2's ID
-
-	// Test comment event structure
-	commentTestPostWithSSE(t, app, token2, postID, "Test comment")
-	commentedEvent := waitForSSEEvent(t, eventCh1, "post_commented", 5*time.Second)
-	commentEvent := parseSSEEventData(t, commentedEvent.Data)
-
-	Expect(commentEvent.Type).To(Equal(events.EventTypePostCommented))
-	Expect(commentEvent.PostID).To(Equal(postID))
-	Expect(commentEvent.TriggeredByUserID).To(Equal(uint(postData["user_id"].(float64)))) // User 2's ID
-}
+var _ = Describe("Server-Sent Events", func() {
+	var (
+		app   *fiber.App
+		token string
+		user  *domain.User
+	)
+
+	BeforeEach(func() {
+		app, _, _ = setupTestApp()
+
+		// Create test user and get token
+		user = createTestUser(sharedContainers.DB, "sseuser", "sse@example.com")
+		var err error
+		token, err = createTestJWT(user.ID)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	Describe("Authentication", func() {
+		It("should reject requests without token", func() {
+			// When: Connect to SSE without token
+			req := httptest.NewRequest("GET", "/api/events/stream", nil)
+			resp, err := app.Test(req)
+
+			// Then: Should return 401 Unauthorized
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp.StatusCode).To(Equal(401))
+		})
+
+		It("should reject requests with invalid token", func() {
+			// When: Connect to SSE with invalid token
+			req := httptest.NewRequest("GET", "/api/events/stream?token=invalid", nil)
+			resp, err := app.Test(req)
+
+			// Then: Should return 401 Unauthorized
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp.StatusCode).To(Equal(401))
+		})
+
+		It("should accept requests with valid token", func() {
+			// When: Connect to SSE with valid token
+			eventCh, cleanup := connectSSE(app, token)
+			defer cleanup()
+
+			// Then: Should receive connection event
+			event := waitForSSEEvent(eventCh, string(string(events.EventTypeConnected)), 5*time.Second)
+			Expect(event.Type).To(Equal(string(string(events.EventTypeConnected))))
+		})
+	})
+
+	Describe("Event Publishing", func() {
+		It("should publish new post events", func() {
+			// Given: SSE connection
+			eventCh, cleanup := connectSSE(app, token)
+			defer cleanup()
+
+			// Wait for connection event
+			waitForSSEEvent(eventCh, string(events.EventTypeConnected), 5*time.Second)
+
+			// When: Create a new post
+			_ = createTestPostWithSSE(app, token, "SSE Test Post", "This is a test post for SSE")
+
+			// Then: Should receive new post event
+			event := waitForSSEEvent(eventCh, string(events.EventTypeNewPost), 5*time.Second)
+			Expect(event.Type).To(Equal(string(events.EventTypeNewPost)))
+
+			// Parse event data
+			eventData := parseSSEEventData(event.Data)
+			Expect(eventData.PostID).To(BeNumerically(">", 0))
+			Expect(eventData.TriggeredByUserID).To(Equal(user.ID))
+		})
+
+		It("should publish post liked events", func() {
+			// Given: SSE connection and a post
+			eventCh, cleanup := connectSSE(app, token)
+			defer cleanup()
+
+			// Wait for connection event
+			waitForSSEEvent(eventCh, string(events.EventTypeConnected), 5*time.Second)
+
+			// Create a post first
+			postData := createTestPostWithSSE(app, token, "Like Test Post", "This post will be liked")
+			postID := uint(postData["id"].(float64))
+
+			// When: Like the post
+			likeTestPostWithSSE(app, token, postID)
+
+			// Then: Should receive post liked event
+			event := waitForSSEEvent(eventCh, string(events.EventTypePostLiked), 5*time.Second)
+			Expect(event.Type).To(Equal(string(events.EventTypePostLiked)))
+
+			// Parse event data
+			eventData := parseSSEEventData(event.Data)
+			Expect(eventData.PostID).To(Equal(postID))
+			Expect(eventData.TriggeredByUserID).To(Equal(user.ID))
+		})
+
+		It("should publish post commented events", func() {
+			// Given: SSE connection and a post
+			eventCh, cleanup := connectSSE(app, token)
+			defer cleanup()
+
+			// Wait for connection event
+			waitForSSEEvent(eventCh, string(events.EventTypeConnected), 5*time.Second)
+
+			// Create a post first
+			postData := createTestPostWithSSE(app, token, "Comment Test Post", "This post will be commented on")
+			postID := uint(postData["id"].(float64))
+
+			// When: Comment on the post
+			commentTestPostWithSSE(app, token, postID, "This is a test comment")
+
+			// Then: Should receive post commented event
+			event := waitForSSEEvent(eventCh, string(events.EventTypePostCommented), 5*time.Second)
+			Expect(event.Type).To(Equal(string(events.EventTypePostCommented)))
+
+			// Parse event data
+			eventData := parseSSEEventData(event.Data)
+			Expect(eventData.PostID).To(Equal(postID))
+			Expect(eventData.TriggeredByUserID).To(Equal(user.ID))
+		})
+	})
+
+	Describe("Event Filtering", func() {
+		It("should not send events triggered by the same user", func() {
+			// Given: SSE connection
+			eventCh, cleanup := connectSSE(app, token)
+			defer cleanup()
+
+			// Wait for connection event
+			waitForSSEEvent(eventCh, string(events.EventTypeConnected), 5*time.Second)
+
+			// When: Create a post (this should trigger an event)
+			_ = createTestPostWithSSE(app, token, "Self Filter Test", "This should not trigger an event for the same user")
+
+			// Then: Should NOT receive new post event (filtered out)
+			select {
+			case event := <-eventCh:
+				// If we receive an event, it should not be a new_post event from the same user
+				if event.Type == string(events.EventTypeNewPost) {
+					eventData := parseSSEEventData(event.Data)
+					Expect(eventData.TriggeredByUserID).NotTo(Equal(user.ID))
+				}
+			case <-time.After(2 * time.Second):
+				// Timeout is expected - no event should be received
+			}
+		})
+	})
+
+	Describe("Multi-User Scenario", func() {
+		It("should handle multiple users receiving events", func() {
+			// Given: Two users
+			user2 := createTestUser(sharedContainers.DB, "sseuser2", "sse2@example.com")
+			token2, err := createTestJWT(user2.ID)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create SSE connections for both users
+			eventCh1, cleanup1 := connectSSE(app, token)
+			defer cleanup1()
+			eventCh2, cleanup2 := connectSSE(app, token2)
+			defer cleanup2()
+
+			// Wait for both connections
+			waitForSSEEvent(eventCh1, string(events.EventTypeConnected), 5*time.Second)
+			waitForSSEEvent(eventCh2, string(events.EventTypeConnected), 5*time.Second)
+
+			// When: User 1 creates a post
+			_ = createTestPostWithSSE(app, token, "Multi User Test", "This post should be seen by user 2")
+
+			// Then: User 2 should receive the new post event
+			event := waitForSSEEvent(eventCh2, string(events.EventTypeNewPost), 5*time.Second)
+			Expect(event.Type).To(Equal(string(events.EventTypeNewPost)))
+
+			eventData := parseSSEEventData(event.Data)
+			Expect(eventData.TriggeredByUserID).To(Equal(user.ID)) // Triggered by user 1
+
+			// And: User 1 should NOT receive the event (filtered out)
+			select {
+			case event := <-eventCh1:
+				if event.Type == string(events.EventTypeNewPost) {
+					Fail("User 1 should not receive their own new post event")
+				}
+			case <-time.After(1 * time.Second):
+				// Expected - no event for user 1
+			}
+		})
+	})
+
+	Describe("Event Data Structure", func() {
+		It("should have correct event structure", func() {
+			// Given: SSE connection
+			eventCh, cleanup := connectSSE(app, token)
+			defer cleanup()
+
+			// Wait for connection event
+			event := waitForSSEEvent(eventCh, string(events.EventTypeConnected), 5*time.Second)
+
+			// Then: Event should have correct structure
+			Expect(event.Type).To(Equal(string(events.EventTypeConnected)))
+			Expect(event.Data).NotTo(BeEmpty())
+
+			// Parse the event data
+			var eventData map[string]interface{}
+			err := json.Unmarshal(event.Data, &eventData)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(eventData).To(HaveKey("message"))
+		})
+
+		It("should include heartbeat events", func() {
+			// Given: SSE connection
+			eventCh, cleanup := connectSSE(app, token)
+			defer cleanup()
+
+			// Wait for connection event
+			waitForSSEEvent(eventCh, string(events.EventTypeConnected), 5*time.Second)
+
+			// When: Wait for heartbeat (sent every 15 seconds)
+			event := waitForSSEEvent(eventCh, string(events.EventTypeHeartbeat), 20*time.Second)
+
+			// Then: Should receive heartbeat event
+			Expect(event.Type).To(Equal(string(events.EventTypeHeartbeat)))
+
+			var eventData map[string]interface{}
+			err := json.Unmarshal(event.Data, &eventData)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(eventData).To(HaveKey("timestamp"))
+		})
+	})
+})

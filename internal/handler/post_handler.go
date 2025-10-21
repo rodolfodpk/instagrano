@@ -69,6 +69,7 @@ func (h *PostHandler) CreatePost(c *fiber.Ctx) error {
 				zap.Error(err),
 				zap.Uint("post_id", post.ID),
 				zap.Uint("user_id", userID))
+			// Don't fail the request if event publishing fails
 		}
 
 		return c.Status(201).JSON(post)
@@ -105,6 +106,7 @@ func (h *PostHandler) CreatePost(c *fiber.Ctx) error {
 			zap.Error(err),
 			zap.Uint("post_id", post.ID),
 			zap.Uint("user_id", userID))
+		// Don't fail the request if event publishing fails
 	}
 
 	return c.Status(201).JSON(post)

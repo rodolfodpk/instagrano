@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"testing"
 	"time"
 
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/rodolfodpk/instagrano/internal/domain"
@@ -14,258 +14,229 @@ import (
 	"github.com/rodolfodpk/instagrano/internal/service"
 )
 
-func TestPostService_CreatePost(t *testing.T) {
-	RegisterTestingT(t)
+var _ = Describe("PostService", func() {
+	Describe("CreatePost", func() {
+		It("should create post successfully", func() {
+			// Given: Post service setup
+			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
+			mockStorage := NewMockMediaStorage()
+			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
 
-	// Setup: Testcontainers PostgreSQL + Mock S3
-	containers, cleanup := setupTestContainers(t)
-	defer cleanup()
+			// Given: User exists
+			user := createTestUser(sharedContainers.DB, "postuser", "post@example.com")
 
-	postRepo := postgresRepo.NewPostRepository(containers.DB)
-	mockStorage := NewMockMediaStorage()
-	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
+			// Given: Post data
+			title := "Test Post"
+			caption := "This is a test post"
+			mediaType := domain.MediaTypeImage
+			fileContent := "fake image content"
+			fileReader := strings.NewReader(fileContent)
+			filename := "test.jpg"
 
-	// Given: User exists
-	user := createTestUser(t, containers.DB, "postuser", "post@example.com")
+			// When: Create post
+			post, err := postService.CreatePost(user.ID, title, caption, mediaType, fileReader, filename)
 
-	// Given: Post data
-	title := "Test Post"
-	caption := "This is a test post"
-	mediaType := domain.MediaTypeImage
-	fileContent := "fake image content"
-	fileReader := strings.NewReader(fileContent)
-	filename := "test.jpg"
+			// Then: Post is created successfully
+			Expect(err).NotTo(HaveOccurred())
+			Expect(post).NotTo(BeNil())
+			Expect(post.ID).To(BeNumerically(">", 0))
+			Expect(post.UserID).To(Equal(user.ID))
+			Expect(post.Title).To(Equal(title))
+			Expect(post.Caption).To(Equal(caption))
+			Expect(post.MediaType).To(Equal(mediaType))
+			Expect(post.MediaURL).To(ContainSubstring("mock-s3.example.com"))
+			Expect(post.MediaURL).To(ContainSubstring("test.jpg"))
 
-	// When: Create post
-	post, err := postService.CreatePost(user.ID, title, caption, mediaType, fileReader, filename)
+			// Verify post was saved to database
+			savedPost, err := postRepo.FindByID(post.ID)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(savedPost.Title).To(Equal(title))
+			Expect(savedPost.Caption).To(Equal(caption))
+		})
 
-	// Then: Post is created successfully
-	Expect(err).NotTo(HaveOccurred())
-	Expect(post).NotTo(BeNil())
-	Expect(post.ID).To(BeNumerically(">", 0))
-	Expect(post.UserID).To(Equal(user.ID))
-	Expect(post.Title).To(Equal(title))
-	Expect(post.Caption).To(Equal(caption))
-	Expect(post.MediaType).To(Equal(mediaType))
-	Expect(post.MediaURL).To(ContainSubstring("mock-s3.example.com"))
-	Expect(post.MediaURL).To(ContainSubstring("test.jpg"))
+		It("should create video post successfully", func() {
+			// Given: Post service setup
+			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
+			mockStorage := NewMockMediaStorage()
+			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
 
-	// Verify post was saved to database
-	savedPost, err := postRepo.FindByID(post.ID)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(savedPost.Title).To(Equal(title))
-	Expect(savedPost.Caption).To(Equal(caption))
-}
+			user := createTestUser(sharedContainers.DB, "videouser", "video@example.com")
 
-func TestPostService_CreatePostWithVideo(t *testing.T) {
-	RegisterTestingT(t)
+			// Given: Video post data
+			title := "Test Video"
+			caption := "This is a test video"
+			mediaType := domain.MediaTypeVideo
+			fileContent := "fake video content"
+			fileReader := strings.NewReader(fileContent)
+			filename := "test.mp4"
 
-	containers, cleanup := setupTestContainers(t)
-	defer cleanup()
+			// When: Create video post
+			post, err := postService.CreatePost(user.ID, title, caption, mediaType, fileReader, filename)
 
-	postRepo := postgresRepo.NewPostRepository(containers.DB)
-	mockStorage := NewMockMediaStorage()
-	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
+			// Then: Video post is created successfully
+			Expect(err).NotTo(HaveOccurred())
+			Expect(post).NotTo(BeNil())
+			Expect(post.MediaType).To(Equal(domain.MediaTypeVideo))
+			Expect(post.MediaURL).To(ContainSubstring("test.mp4"))
 
-	user := createTestUser(t, containers.DB, "videouser", "video@example.com")
+			// Verify video post was saved to database
+			savedPost, err := postRepo.FindByID(post.ID)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(savedPost.MediaType).To(Equal(domain.MediaTypeVideo))
+		})
 
-	// Given: Video post data
-	title := "Test Video"
-	caption := "This is a test video"
-	mediaType := domain.MediaTypeVideo
-	fileContent := "fake video content"
-	fileReader := strings.NewReader(fileContent)
-	filename := "test.mp4"
+		It("should fail with empty title", func() {
+			// Given: Post service setup
+			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
+			mockStorage := NewMockMediaStorage()
+			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
 
-	// When: Create video post
-	post, err := postService.CreatePost(user.ID, title, caption, mediaType, fileReader, filename)
+			user := createTestUser(sharedContainers.DB, "emptytitle", "empty@example.com")
 
-	// Then: Video post is created successfully
-	Expect(err).NotTo(HaveOccurred())
-	Expect(post).NotTo(BeNil())
-	Expect(post.MediaType).To(Equal(domain.MediaTypeVideo))
-	Expect(post.MediaURL).To(ContainSubstring("test.mp4"))
+			// Given: Post with empty title
+			title := ""
+			caption := "This post has no title"
+			mediaType := domain.MediaTypeImage
+			fileReader := strings.NewReader("fake content")
+			filename := "test.jpg"
 
-	// Verify video post was saved to database
-	savedPost, err := postRepo.FindByID(post.ID)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(savedPost.MediaType).To(Equal(domain.MediaTypeVideo))
-}
+			// When: Create post with empty title
+			post, err := postService.CreatePost(user.ID, title, caption, mediaType, fileReader, filename)
 
-func TestPostService_CreatePostEmptyTitle(t *testing.T) {
-	RegisterTestingT(t)
+			// Then: Creation fails with validation error
+			Expect(err).To(HaveOccurred())
+			Expect(post).To(BeNil())
+			Expect(err.Error()).To(ContainSubstring("invalid input"))
+		})
 
-	containers, cleanup := setupTestContainers(t)
-	defer cleanup()
+		It("should handle S3 upload failure", func() {
+			// Given: Post service setup with failing storage
+			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
+			failingStorage := NewFailingMockStorage()
+			postService := service.NewPostService(postRepo, failingStorage, sharedContainers.Cache, 5*time.Minute)
 
-	postRepo := postgresRepo.NewPostRepository(containers.DB)
-	mockStorage := NewMockMediaStorage()
-	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
+			user := createTestUser(sharedContainers.DB, "failuser", "fail@example.com")
 
-	user := createTestUser(t, containers.DB, "emptytitle", "empty@example.com")
+			// Given: Valid post data
+			title := "Test Post"
+			caption := "This will fail S3 upload"
+			mediaType := domain.MediaTypeImage
+			fileReader := strings.NewReader("fake content")
+			filename := "test.jpg"
 
-	// Given: Post with empty title
-	title := ""
-	caption := "This post has no title"
-	mediaType := domain.MediaTypeImage
-	fileReader := strings.NewReader("fake content")
-	filename := "test.jpg"
+			// When: Create post (S3 upload will fail)
+			post, err := postService.CreatePost(user.ID, title, caption, mediaType, fileReader, filename)
 
-	// When: Create post with empty title
-	post, err := postService.CreatePost(user.ID, title, caption, mediaType, fileReader, filename)
+			// Then: Creation fails due to S3 error
+			Expect(err).To(HaveOccurred())
+			Expect(post).To(BeNil())
+			Expect(err.Error()).To(ContainSubstring("failed to upload file to S3"))
 
-	// Then: Creation fails with validation error
-	Expect(err).To(HaveOccurred())
-	Expect(post).To(BeNil())
-	Expect(err.Error()).To(ContainSubstring("invalid input"))
-}
+			// Verify no post was saved to database
+			posts, err := postRepo.GetFeed(10, 0)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(posts).To(HaveLen(0))
+		})
 
-func TestPostService_CreatePostS3UploadFailure(t *testing.T) {
-	RegisterTestingT(t)
+		It("should handle large files", func() {
+			// Given: Post service setup
+			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
+			mockStorage := NewMockMediaStorage()
+			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
 
-	containers, cleanup := setupTestContainers(t)
-	defer cleanup()
+			user := createTestUser(sharedContainers.DB, "largefile", "large@example.com")
 
-	postRepo := postgresRepo.NewPostRepository(containers.DB)
+			// Given: Large file content (simulate large file)
+			largeContent := strings.Repeat("x", 1024*1024) // 1MB
+			fileReader := strings.NewReader(largeContent)
+			filename := "large-file.jpg"
 
-	// Create a mock storage that will fail
-	failingStorage := NewFailingMockStorage()
-	postService := service.NewPostService(postRepo, failingStorage, containers.Cache, 5*time.Minute)
+			// When: Create post with large file
+			post, err := postService.CreatePost(user.ID, "Large File Post", "Testing large file upload", domain.MediaTypeImage, fileReader, filename)
 
-	user := createTestUser(t, containers.DB, "failuser", "fail@example.com")
+			// Then: Post is created successfully
+			Expect(err).NotTo(HaveOccurred())
+			Expect(post).NotTo(BeNil())
+			Expect(post.Title).To(Equal("Large File Post"))
 
-	// Given: Valid post data
-	title := "Test Post"
-	caption := "This will fail S3 upload"
-	mediaType := domain.MediaTypeImage
-	fileReader := strings.NewReader("fake content")
-	filename := "test.jpg"
+			// Verify the mock storage received the large content
+			var foundKey string
+			for key := range mockStorage.files {
+				if strings.Contains(key, "large-file.jpg") {
+					foundKey = key
+					break
+				}
+			}
+			Expect(foundKey).NotTo(BeEmpty())
+			storedContent := mockStorage.files[foundKey]
+			Expect(len(storedContent)).To(Equal(1024 * 1024))
+		})
 
-	// When: Create post (S3 upload will fail)
-	post, err := postService.CreatePost(user.ID, title, caption, mediaType, fileReader, filename)
+		It("should handle special characters", func() {
+			// Given: Post service setup
+			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
+			mockStorage := NewMockMediaStorage()
+			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
 
-	// Then: Creation fails due to S3 error
-	Expect(err).To(HaveOccurred())
-	Expect(post).To(BeNil())
-	Expect(err.Error()).To(ContainSubstring("failed to upload file to S3"))
+			user := createTestUser(sharedContainers.DB, "special", "special@example.com")
 
-	// Verify no post was saved to database
-	posts, err := postRepo.GetFeed(10, 0)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(posts).To(HaveLen(0))
-}
+			// Given: Post with special characters
+			title := "Test Post with émojis 🚀 and spëcial chars"
+			caption := "Testing unicode: 你好世界 🌍"
+			fileReader := strings.NewReader("fake content")
+			filename := "test-émoji-🚀.jpg"
 
-func TestPostService_GetPost(t *testing.T) {
-	RegisterTestingT(t)
+			// When: Create post with special characters
+			post, err := postService.CreatePost(user.ID, title, caption, domain.MediaTypeImage, fileReader, filename)
 
-	containers, cleanup := setupTestContainers(t)
-	defer cleanup()
+			// Then: Post is created successfully
+			Expect(err).NotTo(HaveOccurred())
+			Expect(post).NotTo(BeNil())
+			Expect(post.Title).To(Equal(title))
+			Expect(post.Caption).To(Equal(caption))
+			Expect(post.MediaURL).To(ContainSubstring("test-émoji-🚀.jpg"))
+		})
+	})
 
-	postRepo := postgresRepo.NewPostRepository(containers.DB)
-	mockStorage := NewMockMediaStorage()
-	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
+	Describe("GetPost", func() {
+		It("should retrieve post successfully", func() {
+			// Given: Post service setup
+			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
+			mockStorage := NewMockMediaStorage()
+			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
 
-	// Given: User and post exist
-	user := createTestUser(t, containers.DB, "getuser", "get@example.com")
-	createdPost := createTestPost(t, containers.DB, user.ID, "Get Test Post", "Testing post retrieval")
+			// Given: User and post exist
+			user := createTestUser(sharedContainers.DB, "getuser", "get@example.com")
+			createdPost := createTestPost(sharedContainers.DB, user.ID, "Get Test Post", "Testing post retrieval")
 
-	// When: Get post by ID
-	retrievedPost, err := postService.GetPost(createdPost.ID)
+			// When: Get post by ID
+			retrievedPost, err := postService.GetPost(createdPost.ID)
 
-	// Then: Post is retrieved successfully
-	Expect(err).NotTo(HaveOccurred())
-	Expect(retrievedPost).NotTo(BeNil())
-	Expect(retrievedPost.ID).To(Equal(createdPost.ID))
-	Expect(retrievedPost.Title).To(Equal("Get Test Post"))
-	Expect(retrievedPost.Caption).To(Equal("Testing post retrieval"))
-	Expect(retrievedPost.UserID).To(Equal(user.ID))
-}
+			// Then: Post is retrieved successfully
+			Expect(err).NotTo(HaveOccurred())
+			Expect(retrievedPost).NotTo(BeNil())
+			Expect(retrievedPost.ID).To(Equal(createdPost.ID))
+			Expect(retrievedPost.Title).To(Equal("Get Test Post"))
+			Expect(retrievedPost.Caption).To(Equal("Testing post retrieval"))
+			Expect(retrievedPost.UserID).To(Equal(user.ID))
+		})
 
-func TestPostService_GetPostNotFound(t *testing.T) {
-	RegisterTestingT(t)
+		It("should return error for non-existent post", func() {
+			// Given: Post service setup
+			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
+			mockStorage := NewMockMediaStorage()
+			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
 
-	containers, cleanup := setupTestContainers(t)
-	defer cleanup()
+			// When: Get non-existent post
+			post, err := postService.GetPost(99999)
 
-	postRepo := postgresRepo.NewPostRepository(containers.DB)
-	mockStorage := NewMockMediaStorage()
-	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
-
-	// When: Get non-existent post
-	post, err := postService.GetPost(99999)
-
-	// Then: Error is returned
-	Expect(err).To(HaveOccurred())
-	Expect(post).To(BeNil())
-	Expect(err.Error()).To(ContainSubstring("not found"))
-}
-
-func TestPostService_CreatePostWithLargeFile(t *testing.T) {
-	RegisterTestingT(t)
-
-	containers, cleanup := setupTestContainers(t)
-	defer cleanup()
-
-	postRepo := postgresRepo.NewPostRepository(containers.DB)
-	mockStorage := NewMockMediaStorage()
-	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
-
-	user := createTestUser(t, containers.DB, "largefile", "large@example.com")
-
-	// Given: Large file content (simulate large file)
-	largeContent := strings.Repeat("x", 1024*1024) // 1MB
-	fileReader := strings.NewReader(largeContent)
-	filename := "large-file.jpg"
-
-	// When: Create post with large file
-	post, err := postService.CreatePost(user.ID, "Large File Post", "Testing large file upload", domain.MediaTypeImage, fileReader, filename)
-
-	// Then: Post is created successfully
-	Expect(err).NotTo(HaveOccurred())
-	Expect(post).NotTo(BeNil())
-	Expect(post.Title).To(Equal("Large File Post"))
-
-	// Verify the mock storage received the large content
-	var foundKey string
-	for key := range mockStorage.files {
-		if strings.Contains(key, "large-file.jpg") {
-			foundKey = key
-			break
-		}
-	}
-	Expect(foundKey).NotTo(BeEmpty())
-	storedContent := mockStorage.files[foundKey]
-	Expect(len(storedContent)).To(Equal(1024 * 1024))
-}
-
-func TestPostService_CreatePostWithSpecialCharacters(t *testing.T) {
-	RegisterTestingT(t)
-
-	containers, cleanup := setupTestContainers(t)
-	defer cleanup()
-
-	postRepo := postgresRepo.NewPostRepository(containers.DB)
-	mockStorage := NewMockMediaStorage()
-	postService := service.NewPostService(postRepo, mockStorage, containers.Cache, 5*time.Minute)
-
-	user := createTestUser(t, containers.DB, "special", "special@example.com")
-
-	// Given: Post with special characters
-	title := "Test Post with émojis 🚀 and spëcial chars"
-	caption := "Testing unicode: 你好世界 🌍"
-	fileReader := strings.NewReader("fake content")
-	filename := "test-émoji-🚀.jpg"
-
-	// When: Create post with special characters
-	post, err := postService.CreatePost(user.ID, title, caption, domain.MediaTypeImage, fileReader, filename)
-
-	// Then: Post is created successfully
-	Expect(err).NotTo(HaveOccurred())
-	Expect(post).NotTo(BeNil())
-	Expect(post.Title).To(Equal(title))
-	Expect(post.Caption).To(Equal(caption))
-	Expect(post.MediaURL).To(ContainSubstring("test-émoji-🚀.jpg"))
-}
+			// Then: Error is returned
+			Expect(err).To(HaveOccurred())
+			Expect(post).To(BeNil())
+			Expect(err.Error()).To(ContainSubstring("not found"))
+		})
+	})
+})
 
 // Helper types for testing
 

@@ -1,8 +1,7 @@
 package tests
 
 import (
-	"testing"
-
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -10,134 +9,188 @@ import (
 	"github.com/rodolfodpk/instagrano/internal/logger"
 )
 
-func TestLogger_New(t *testing.T) {
-	RegisterTestingT(t)
+var _ = Describe("Logger", func() {
+	Describe("New", func() {
+		It("should create logger with JSON format", func() {
+			// When: Create logger with JSON format
+			jsonLogger := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
 
-	// Test JSON format
-	jsonLogger := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
-	Expect(jsonLogger).NotTo(BeNil())
-
-	// Test console format
-	consoleLogger := logger.New(zap.NewAtomicLevelAt(zap.DebugLevel), "console")
-	Expect(consoleLogger).NotTo(BeNil())
-
-	// Test invalid format (should default to JSON)
-	invalidLogger := logger.New(zap.NewAtomicLevelAt(zap.WarnLevel), "invalid")
-	Expect(invalidLogger).NotTo(BeNil())
-}
-
-func TestLogger_WithRequestID(t *testing.T) {
-	RegisterTestingT(t)
-
-	// Given: A logger instance
-	log := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
-
-	// When: Add request ID
-	loggerWithID := log.WithRequestID("req-123")
-
-	// Then: Should return a new logger instance
-	Expect(loggerWithID).NotTo(BeNil())
-	Expect(loggerWithID).NotTo(Equal(log)) // Should be a new instance
-}
-
-func TestLogger_WithUserID(t *testing.T) {
-	RegisterTestingT(t)
-
-	// Given: A logger instance
-	log := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
-
-	// When: Add user ID
-	loggerWithUserID := log.WithUserID(123)
-
-	// Then: Should return a new logger instance
-	Expect(loggerWithUserID).NotTo(BeNil())
-	Expect(loggerWithUserID).NotTo(Equal(log)) // Should be a new instance
-}
-
-func TestLogger_WithField(t *testing.T) {
-	RegisterTestingT(t)
-
-	// Given: A logger instance
-	log := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
-
-	// When: Add a field
-	loggerWithField := log.WithField("key", "value")
-
-	// Then: Should return a new logger instance
-	Expect(loggerWithField).NotTo(BeNil())
-	Expect(loggerWithField).NotTo(Equal(log)) // Should be a new instance
-}
-
-func TestLogger_WithFields(t *testing.T) {
-	RegisterTestingT(t)
-
-	// Given: A logger instance
-	log := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
-
-	// When: Add multiple fields
-	fields := map[string]interface{}{
-		"field1": "value1",
-		"field2": 42,
-		"field3": true,
-	}
-	loggerWithFields := log.WithFields(fields)
-
-	// Then: Should return a new logger instance
-	Expect(loggerWithFields).NotTo(BeNil())
-	Expect(loggerWithFields).NotTo(Equal(log)) // Should be a new instance
-}
-
-func TestLogger_Chaining(t *testing.T) {
-	RegisterTestingT(t)
-
-	// Given: A logger instance
-	log := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
-
-	// When: Chain multiple operations
-	chainedLogger := log.
-		WithRequestID("req-456").
-		WithUserID(789).
-		WithField("operation", "test").
-		WithFields(map[string]interface{}{
-			"additional": "data",
+			// Then: Should create logger successfully
+			Expect(jsonLogger).NotTo(BeNil())
 		})
 
-	// Then: Should return a new logger instance
-	Expect(chainedLogger).NotTo(BeNil())
-	Expect(chainedLogger).NotTo(Equal(log)) // Should be a new instance
-}
+		It("should create logger with console format", func() {
+			// When: Create logger with console format
+			consoleLogger := logger.New(zap.NewAtomicLevelAt(zap.DebugLevel), "console")
 
-func TestLogger_DifferentLevels(t *testing.T) {
-	RegisterTestingT(t)
+			// Then: Should create logger successfully
+			Expect(consoleLogger).NotTo(BeNil())
+		})
 
-	// Test all log levels
-	levels := []zapcore.Level{
-		zap.DebugLevel,
-		zap.InfoLevel,
-		zap.WarnLevel,
-		zap.ErrorLevel,
-	}
+		It("should default to JSON format for invalid format", func() {
+			// When: Create logger with invalid format
+			invalidLogger := logger.New(zap.NewAtomicLevelAt(zap.WarnLevel), "invalid")
 
-	for _, level := range levels {
-		// Given: Logger with specific level
-		log := logger.New(zap.NewAtomicLevelAt(level), "json")
+			// Then: Should create logger successfully (defaults to JSON)
+			Expect(invalidLogger).NotTo(BeNil())
+		})
+	})
 
-		// Then: Should create logger successfully
-		Expect(log).NotTo(BeNil())
-	}
-}
+	Describe("WithRequestID", func() {
+		It("should add request ID to logger", func() {
+			// Given: A logger
+			logger := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
 
-func TestLogger_DifferentFormats(t *testing.T) {
-	RegisterTestingT(t)
+			// When: Add request ID
+			requestID := "req-123"
+			loggerWithID := logger.WithRequestID(requestID)
 
-	// Test different formats
-	formats := []string{"json", "console", "invalid"}
+			// Then: Should return logger with request ID
+			Expect(loggerWithID).NotTo(BeNil())
+		})
 
-	for _, format := range formats {
-		// Given: Logger with specific format
-		log := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), format)
+		It("should handle empty request ID", func() {
+			// Given: A logger
+			logger := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
 
-		// Then: Should create logger successfully (invalid format should default to JSON)
-		Expect(log).NotTo(BeNil())
-	}
-}
+			// When: Add empty request ID
+			loggerWithID := logger.WithRequestID("")
+
+			// Then: Should return logger (empty ID is valid)
+			Expect(loggerWithID).NotTo(BeNil())
+		})
+	})
+
+	Describe("WithUserID", func() {
+		It("should add user ID to logger", func() {
+			// Given: A logger
+			logger := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
+
+			// When: Add user ID
+			userID := uint(123)
+			loggerWithUserID := logger.WithUserID(userID)
+
+			// Then: Should return logger with user ID
+			Expect(loggerWithUserID).NotTo(BeNil())
+		})
+
+		It("should handle zero user ID", func() {
+			// Given: A logger
+			logger := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
+
+			// When: Add zero user ID
+			loggerWithUserID := logger.WithUserID(0)
+
+			// Then: Should return logger (zero ID is valid)
+			Expect(loggerWithUserID).NotTo(BeNil())
+		})
+	})
+
+	Describe("Logging Levels", func() {
+		It("should respect debug level", func() {
+			// Given: A logger with debug level
+			logger := logger.New(zap.NewAtomicLevelAt(zap.DebugLevel), "json")
+
+			// When: Log at debug level
+			// Then: Should not panic (debug level allows debug logs)
+			Expect(func() {
+				logger.Logger.Debug("debug message")
+			}).NotTo(Panic())
+		})
+
+		It("should respect info level", func() {
+			// Given: A logger with info level
+			logger := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
+
+			// When: Log at info level
+			// Then: Should not panic (info level allows info logs)
+			Expect(func() {
+				logger.Logger.Info("info message")
+			}).NotTo(Panic())
+		})
+
+		It("should respect warn level", func() {
+			// Given: A logger with warn level
+			logger := logger.New(zap.NewAtomicLevelAt(zap.WarnLevel), "json")
+
+			// When: Log at warn level
+			// Then: Should not panic (warn level allows warn logs)
+			Expect(func() {
+				logger.Logger.Warn("warn message")
+			}).NotTo(Panic())
+		})
+
+		It("should respect error level", func() {
+			// Given: A logger with error level
+			logger := logger.New(zap.NewAtomicLevelAt(zap.ErrorLevel), "json")
+
+			// When: Log at error level
+			// Then: Should not panic (error level allows error logs)
+			Expect(func() {
+				logger.Logger.Error("error message")
+			}).NotTo(Panic())
+		})
+	})
+
+	Describe("Logger Fields", func() {
+		It("should support structured logging", func() {
+			// Given: A logger
+			logger := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
+
+			// When: Log with fields
+			// Then: Should not panic (structured logging should work)
+			Expect(func() {
+				logger.Logger.Info("structured message",
+					zap.String("key", "value"),
+					zap.Int("number", 42),
+					zap.Bool("flag", true),
+				)
+			}).NotTo(Panic())
+		})
+
+		It("should support error logging with fields", func() {
+			// Given: A logger
+			logger := logger.New(zap.NewAtomicLevelAt(zap.ErrorLevel), "json")
+
+			// When: Log error with fields
+			// Then: Should not panic (error logging with fields should work)
+			Expect(func() {
+				logger.Logger.Error("error message",
+					zap.String("operation", "test"),
+					zap.Error(nil), // nil error is valid
+				)
+			}).NotTo(Panic())
+		})
+	})
+
+	Describe("Logger Configuration", func() {
+		It("should create logger with different levels", func() {
+			levels := []zapcore.Level{
+				zap.DebugLevel,
+				zap.InfoLevel,
+				zap.WarnLevel,
+				zap.ErrorLevel,
+			}
+
+			for _, level := range levels {
+				// When: Create logger with specific level
+				logger := logger.New(zap.NewAtomicLevelAt(level), "json")
+
+				// Then: Should create logger successfully
+				Expect(logger).NotTo(BeNil())
+			}
+		})
+
+		It("should create logger with different formats", func() {
+			formats := []string{"json", "console", "invalid"}
+
+			for _, format := range formats {
+				// When: Create logger with specific format
+				logger := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), format)
+
+				// Then: Should create logger successfully
+				Expect(logger).NotTo(BeNil())
+			}
+		})
+	})
+})

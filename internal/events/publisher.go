@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	// RedisChannel is the channel name for broadcasting events
-	RedisChannel = "instagrano:events"
+	// EventChannel is the channel name for broadcasting events
+	EventChannel = "instagrano:events"
 )
 
 // Publisher handles publishing events to Redis pub/sub
@@ -46,7 +46,7 @@ func (p *Publisher) Publish(ctx context.Context, event Event) error {
 	}
 
 	// Publish to Redis channel
-	err = p.cache.Publish(ctx, RedisChannel, string(eventJSON))
+	err = p.cache.Publish(ctx, EventChannel, string(eventJSON))
 	if err != nil {
 		p.logger.Error("failed to publish event",
 			zap.Error(err),

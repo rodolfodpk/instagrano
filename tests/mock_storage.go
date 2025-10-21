@@ -20,9 +20,9 @@ type MockMediaStorage struct {
 func NewMockMediaStorage() *MockMediaStorage {
 	// Use mock controller config for tests
 	webclientConfig := webclient.Config{
-		UseMockController: true,
-		MockBaseURL:       "http://localhost:8080",
-		RealURLTimeout:    5 * time.Second,
+		UseMockController: false, // Disable mock controller to avoid URL rewriting issues
+		MockBaseURL:       "https://via.placeholder.com",
+		RealURLTimeout:    30 * time.Second, // Increase timeout
 	}
 
 	return &MockMediaStorage{

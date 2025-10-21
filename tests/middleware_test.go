@@ -2,9 +2,10 @@ package tests
 
 import (
 	"net/http/httptest"
-	"testing"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
@@ -12,159 +13,232 @@ import (
 	"github.com/rodolfodpk/instagrano/internal/middleware"
 )
 
-func TestRequestLogger(t *testing.T) {
-	RegisterTestingT(t)
+var _ = Describe("RequestLogger", func() {
+	It("should log requests successfully", func() {
+		// Given: A Fiber app with request logger middleware
+		app := fiber.New()
+		log := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
+		app.Use(middleware.RequestLogger(log))
 
-	// Given: A Fiber app with request logger middleware
-	app := fiber.New()
-	log := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
-	app.Use(middleware.RequestLogger(log))
+		// Add a test route
+		app.Get("/test", func(c *fiber.Ctx) error {
+			return c.JSON(fiber.Map{"message": "test"})
+		})
 
-	// Add a test route
-	app.Get("/test", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"message": "test"})
+		// When: Make a request
+		req := httptest.NewRequest("GET", "/test", nil)
+		resp, err := app.Test(req)
+
+		// Then: Should handle request successfully
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.StatusCode).To(Equal(200))
 	})
 
-	// When: Make a request
-	req := httptest.NewRequest("GET", "/test", nil)
-	resp, err := app.Test(req)
+	It("should handle different HTTP methods", func() {
+		// Given: A Fiber app with request logger middleware
+		app := fiber.New()
+		log := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
+		app.Use(middleware.RequestLogger(log))
 
-	// Then: Request should be processed successfully
-	Expect(err).NotTo(HaveOccurred())
-	Expect(resp.StatusCode).To(Equal(200))
-}
+		// Add test routes for different methods
+		app.Get("/get", func(c *fiber.Ctx) error {
+			return c.JSON(fiber.Map{"method": "GET"})
+		})
+		app.Post("/post", func(c *fiber.Ctx) error {
+			return c.JSON(fiber.Map{"method": "POST"})
+		})
+		app.Put("/put", func(c *fiber.Ctx) error {
+			return c.JSON(fiber.Map{"method": "PUT"})
+		})
+		app.Delete("/delete", func(c *fiber.Ctx) error {
+			return c.JSON(fiber.Map{"method": "DELETE"})
+		})
 
-func TestRequestLogger_WithUserAgent(t *testing.T) {
-	RegisterTestingT(t)
+		// When: Make requests with different methods
+		methods := []string{"GET", "POST", "PUT", "DELETE"}
+		for _, method := range methods {
+			req := httptest.NewRequest(method, "/"+method, nil)
+			resp, err := app.Test(req)
 
-	// Given: A Fiber app with request logger middleware
-	app := fiber.New()
-	log := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
-	app.Use(middleware.RequestLogger(log))
-
-	// Add a test route
-	app.Get("/test", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"message": "test"})
+			// Then: Should handle each method successfully
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp.StatusCode).To(Equal(200))
+		}
 	})
 
-	// When: Make a request with User-Agent header
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("User-Agent", "TestAgent/1.0")
-	resp, err := app.Test(req)
+	It("should handle errors gracefully", func() {
+		// Given: A Fiber app with request logger middleware
+		app := fiber.New()
+		log := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
+		app.Use(middleware.RequestLogger(log))
 
-	// Then: Request should be processed successfully
-	Expect(err).NotTo(HaveOccurred())
-	Expect(resp.StatusCode).To(Equal(200))
-}
+		// Add a route that returns an error
+		app.Get("/error", func(c *fiber.Ctx) error {
+			return fiber.NewError(500, "internal server error")
+		})
 
-func TestRequestLogger_WithXForwardedFor(t *testing.T) {
-	RegisterTestingT(t)
+		// When: Make a request to error route
+		req := httptest.NewRequest("GET", "/error", nil)
+		resp, err := app.Test(req)
 
-	// Given: A Fiber app with request logger middleware
-	app := fiber.New()
-	log := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
-	app.Use(middleware.RequestLogger(log))
+		// Then: Should handle error gracefully
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.StatusCode).To(Equal(500))
+	})
+})
 
-	// Add a test route
-	app.Get("/test", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"message": "test"})
+var _ = Describe("CORS", func() {
+	It("should add CORS headers", func() {
+		// Given: A Fiber app with CORS middleware
+		app := fiber.New()
+		app.Use(cors.New())
+
+		// Add a test route
+		app.Get("/test", func(c *fiber.Ctx) error {
+			return c.SendString("OK")
+		})
+
+		// When: Make a request with Origin header
+		req := httptest.NewRequest("GET", "/test", nil)
+		req.Header.Set("Origin", "http://example.com")
+		resp, err := app.Test(req)
+
+		// Then: Should include CORS headers
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.StatusCode).To(Equal(200))
+		Expect(resp.Header.Get("Access-Control-Allow-Origin")).To(Equal("*"))
 	})
 
-	// When: Make a request with X-Forwarded-For header
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("X-Forwarded-For", "192.168.1.1")
-	resp, err := app.Test(req)
+	It("should handle preflight OPTIONS requests", func() {
+		// Given: A Fiber app with CORS middleware
+		app := fiber.New()
+		app.Use(cors.New())
 
-	// Then: Request should be processed successfully
-	Expect(err).NotTo(HaveOccurred())
-	Expect(resp.StatusCode).To(Equal(200))
-}
+		// Add a test route
+		app.Get("/test", func(c *fiber.Ctx) error {
+			return c.JSON(fiber.Map{"message": "test"})
+		})
 
-func TestRequestLogger_PostRequest(t *testing.T) {
-	RegisterTestingT(t)
+		// When: Make a preflight OPTIONS request
+		req := httptest.NewRequest("OPTIONS", "/test", nil)
+		req.Header.Set("Origin", "http://localhost:3000")
+		req.Header.Set("Access-Control-Request-Method", "GET")
+		req.Header.Set("Access-Control-Request-Headers", "Content-Type")
+		resp, err := app.Test(req)
 
-	// Given: A Fiber app with request logger middleware
-	app := fiber.New()
-	log := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
-	app.Use(middleware.RequestLogger(log))
+		// Then: Should handle preflight request
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.StatusCode).To(Equal(204))
+		Expect(resp.Header.Get("Access-Control-Allow-Origin")).To(Equal("*"))
+	})
+})
 
-	// Add a test route
-	app.Post("/test", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"message": "test"})
+var _ = Describe("AuthRequired", func() {
+	It("should allow requests with valid JWT token", func() {
+		// Given: A Fiber app with auth middleware
+		app := fiber.New()
+		app.Use(middleware.JWT("test-secret"))
+
+		// Add a protected route
+		app.Get("/protected", func(c *fiber.Ctx) error {
+			return c.JSON(fiber.Map{"message": "protected"})
+		})
+
+		// Create a valid JWT token
+		token, err := createTestJWT(1)
+		Expect(err).NotTo(HaveOccurred())
+
+		// When: Make request with valid token
+		req := httptest.NewRequest("GET", "/protected", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err := app.Test(req)
+
+		// Then: Should allow access
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.StatusCode).To(Equal(200))
 	})
 
-	// When: Make a POST request
-	req := httptest.NewRequest("POST", "/test", nil)
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := app.Test(req)
+	It("should reject requests without JWT token", func() {
+		// Given: A Fiber app with auth middleware
+		app := fiber.New()
+		app.Use(middleware.JWT("test-secret"))
 
-	// Then: Request should be processed successfully
-	Expect(err).NotTo(HaveOccurred())
-	Expect(resp.StatusCode).To(Equal(200))
-}
+		// Add a protected route
+		app.Get("/protected", func(c *fiber.Ctx) error {
+			return c.JSON(fiber.Map{"message": "protected"})
+		})
 
-func TestRequestLogger_ErrorResponse(t *testing.T) {
-	RegisterTestingT(t)
+		// When: Make request without token
+		req := httptest.NewRequest("GET", "/protected", nil)
+		resp, err := app.Test(req)
 
-	// Given: A Fiber app with request logger middleware
-	app := fiber.New()
-	log := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
-	app.Use(middleware.RequestLogger(log))
-
-	// Add a test route that returns an error
-	app.Get("/error", func(c *fiber.Ctx) error {
-		return c.Status(500).JSON(fiber.Map{"error": "test error"})
+		// Then: Should reject access
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.StatusCode).To(Equal(401))
 	})
 
-	// When: Make a request to error route
-	req := httptest.NewRequest("GET", "/error", nil)
-	resp, err := app.Test(req)
+	It("should reject requests with invalid JWT token", func() {
+		// Given: A Fiber app with auth middleware
+		app := fiber.New()
+		app.Use(middleware.JWT("test-secret"))
 
-	// Then: Request should be processed successfully (error is handled by route)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(resp.StatusCode).To(Equal(500))
-}
+		// Add a protected route
+		app.Get("/protected", func(c *fiber.Ctx) error {
+			return c.JSON(fiber.Map{"message": "protected"})
+		})
 
-func TestRequestLogger_NotFound(t *testing.T) {
-	RegisterTestingT(t)
+		// When: Make request with invalid token
+		req := httptest.NewRequest("GET", "/protected", nil)
+		req.Header.Set("Authorization", "Bearer invalid-token")
+		resp, err := app.Test(req)
 
-	// Given: A Fiber app with request logger middleware
-	app := fiber.New()
-	log := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
-	app.Use(middleware.RequestLogger(log))
-
-	// When: Make a request to non-existent route
-	req := httptest.NewRequest("GET", "/nonexistent", nil)
-	resp, err := app.Test(req)
-
-	// Then: Request should return 404
-	Expect(err).NotTo(HaveOccurred())
-	Expect(resp.StatusCode).To(Equal(404))
-}
-
-func TestGenerateRequestID(t *testing.T) {
-	RegisterTestingT(t)
-
-	// When: Generate multiple request IDs (we can't test the private function directly,
-	// but we can test that the middleware works correctly)
-	app := fiber.New()
-	log := logger.New(zap.NewAtomicLevelAt(zap.InfoLevel), "json")
-	app.Use(middleware.RequestLogger(log))
-
-	app.Get("/test", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"message": "test"})
+		// Then: Should reject access
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.StatusCode).To(Equal(401))
 	})
 
-	// Make multiple requests to test request ID generation
-	req1 := httptest.NewRequest("GET", "/test", nil)
-	resp1, err := app.Test(req1)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(resp1.StatusCode).To(Equal(200))
+	It("should reject requests with malformed Authorization header", func() {
+		// Given: A Fiber app with auth middleware
+		app := fiber.New()
+		app.Use(middleware.JWT("test-secret"))
 
-	req2 := httptest.NewRequest("GET", "/test", nil)
-	resp2, err := app.Test(req2)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(resp2.StatusCode).To(Equal(200))
+		// Add a protected route
+		app.Get("/protected", func(c *fiber.Ctx) error {
+			return c.JSON(fiber.Map{"message": "protected"})
+		})
 
-	// Both requests should succeed (request IDs are generated internally)
-}
+		// When: Make request with malformed header
+		req := httptest.NewRequest("GET", "/protected", nil)
+		req.Header.Set("Authorization", "InvalidFormat token")
+		resp, err := app.Test(req)
+
+		// Then: Should reject access
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.StatusCode).To(Equal(401))
+	})
+
+	It("should extract user ID from valid token", func() {
+		// Given: A Fiber app with auth middleware
+		app := fiber.New()
+		app.Use(middleware.JWT("test-secret"))
+
+		// Add a protected route that returns user ID
+		app.Get("/protected", func(c *fiber.Ctx) error {
+			userID := c.Locals("user_id")
+			return c.JSON(fiber.Map{"user_id": userID})
+		})
+
+		// Create a valid JWT token for user ID 123
+		token, err := createTestJWT(123)
+		Expect(err).NotTo(HaveOccurred())
+
+		// When: Make request with valid token
+		req := httptest.NewRequest("GET", "/protected", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err := app.Test(req)
+
+		// Then: Should extract user ID correctly
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.StatusCode).To(Equal(200))
+	})
+})

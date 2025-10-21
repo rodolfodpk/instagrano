@@ -7,6 +7,8 @@ const (
 	EventTypeNewPost       EventType = "new_post"
 	EventTypePostLiked     EventType = "post_liked"
 	EventTypePostCommented EventType = "post_commented"
+	EventTypeConnected     EventType = "connected"
+	EventTypeHeartbeat     EventType = "heartbeat"
 )
 
 // Event represents a real-time event that can be broadcast to clients
