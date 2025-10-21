@@ -12,8 +12,7 @@ test:
 	go test -v -cover ./...
 
 test-full:
-	go test -race -coverprofile=coverage.out -covermode=atomic ./tests/ -coverpkg=./...
-	go tool cover -func=coverage.out | tail -1
+	go test -race -v ./tests/...
 
 swagger:
 	$(shell go env GOPATH)/bin/swag init -g cmd/api/main.go -o docs

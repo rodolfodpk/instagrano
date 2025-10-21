@@ -18,6 +18,6 @@ jobs:
     - name: Start Docker daemon
       run: sudo systemctl start docker
     - run: go mod download
-    - run: make test-full
+    - run: go test -race -v ./tests/...
       env:
         TESTCONTAINERS_RYUK_DISABLED: true
