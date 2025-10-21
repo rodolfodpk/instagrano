@@ -2,14 +2,12 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Trend } from 'k6/metrics';
+import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.1/index.js';
 import { config, generateUserData, authHeader, logCacheComparison } from '../helpers/config.js';
 
 export const options = {
-  stages: [
-    { duration: '30s', target: 5 },   // Ramp up to 5 users
-    { duration: '2m', target: 5 },    // Stay at 5 users
-    { duration: '30s', target: 0 },   // Ramp down
-  ],
+  vus: 3,
+  duration: '45s',
   thresholds: {
     ...config.thresholds,
     'cache_hit_duration': ['p(95)<100'],

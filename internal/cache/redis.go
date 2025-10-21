@@ -15,6 +15,7 @@ type Cache interface {
 	Set(ctx context.Context, key string, value []byte, ttl time.Duration) error
 	Delete(ctx context.Context, key string) error
 	Ping(ctx context.Context) error
+	FlushAll(ctx context.Context) error
 }
 
 // RedisCache implements the Cache interface using Redis
@@ -98,3 +99,12 @@ func (r *RedisCache) Ping(ctx context.Context) error {
 	return r.client.Ping(ctx).Err()
 }
 
+// FlushAll removes all keys from the current database
+func (r *RedisCache) FlushAll(ctx context.Context) error {
+	err := r.client.FlushDB(ctx).Err()
+	if err != nil {
+		r.logger.Error("redis flushdb failed", zap.Error(err))
+		return err
+	}
+	return nil
+}

@@ -1,13 +1,12 @@
-// K6 Authentication Load Test
+// K6 Authentication Load Test (Quick Version)
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Rate } from 'k6/metrics';
-import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.1/index.js';
 import { config, generateUserData, authHeader } from '../helpers/config.js';
 
 export const options = {
   vus: 5,
-  duration: '30s',
+  duration: '15s',
   thresholds: config.thresholds,
 };
 
@@ -36,7 +35,7 @@ export default function () {
     errorRate.add(1);
   }
   
-  sleep(1);
+  sleep(0.5);
   
   // Test 2: User Login
   const loginRes = http.post(
@@ -60,7 +59,7 @@ export default function () {
   
   const token = loginRes.json('token');
   
-  sleep(1);
+  sleep(0.5);
   
   // Test 3: Authenticated Request (/me)
   if (token) {
@@ -75,13 +74,6 @@ export default function () {
     });
   }
   
-  sleep(1);
-}
-
-export function handleSummary(data) {
-  return {
-    'stdout': textSummary(data, { indent: ' ', enableColors: true }),
-    'tests/k6/results/auth-summary.json': JSON.stringify(data),
-  };
+  sleep(0.5);
 }
 

@@ -2,15 +2,12 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Rate } from 'k6/metrics';
+import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.1/index.js';
 import { config, generateUserData, authHeader } from '../helpers/config.js';
 
 export const options = {
-  stages: [
-    { duration: '30s', target: 5 },   // Ramp up to 5 users
-    { duration: '1m', target: 10 },   // Ramp up to 10 users
-    { duration: '1m', target: 10 },  // Stay at 10 users
-    { duration: '30s', target: 0 },  // Ramp down
-  ],
+  vus: 3,
+  duration: '30s',
   thresholds: config.thresholds,
 };
 

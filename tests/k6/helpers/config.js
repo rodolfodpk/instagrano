@@ -4,7 +4,7 @@ export const config = {
   // API base URL
   apiUrl: __ENV.API_URL || 'http://localhost:8080',
   
-  // Test thresholds
+  // Test thresholds (basic - specific tests can override)
   thresholds: {
     // Response time thresholds
     'http_req_duration': [
@@ -14,10 +14,6 @@ export const config = {
     
     // Error rate threshold
     'http_req_failed': ['rate<0.01'], // Less than 1% errors
-    
-    // Cache performance thresholds (for feed tests)
-    'cache_hit_duration': ['p(95)<100'],  // Cached requests should be fast
-    'cache_miss_duration': ['p(95)<500'], // Uncached requests can be slower
   },
   
   // Summary statistics

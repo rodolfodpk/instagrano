@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/onsi/gomega"
 	"github.com/gofiber/fiber/v2"
+	. "github.com/onsi/gomega"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/modules/redis"
@@ -20,10 +20,10 @@ import (
 	"github.com/rodolfodpk/instagrano/internal/cache"
 	"github.com/rodolfodpk/instagrano/internal/config"
 	"github.com/rodolfodpk/instagrano/internal/domain"
-	postgresRepo "github.com/rodolfodpk/instagrano/internal/repository/postgres"
-	"github.com/rodolfodpk/instagrano/internal/service"
 	"github.com/rodolfodpk/instagrano/internal/handler"
 	"github.com/rodolfodpk/instagrano/internal/middleware"
+	postgresRepo "github.com/rodolfodpk/instagrano/internal/repository/postgres"
+	"github.com/rodolfodpk/instagrano/internal/service"
 	"go.uber.org/zap"
 )
 
@@ -35,9 +35,8 @@ type TestContainers struct {
 	Cache             cache.Cache
 }
 
-// setupTestContainers starts PostgreSQL and Redis containers
-func setupTestContainers(t *testing.T) (*TestContainers, func()) {
-	RegisterTestingT(t)
+// setupSharedTestContainers creates containers that persist across all tests
+func setupSharedTestContainers() *TestContainers {
 	ctx := context.Background()
 
 	// Start PostgreSQL container
@@ -52,18 +51,24 @@ func setupTestContainers(t *testing.T) (*TestContainers, func()) {
 				WithStartupTimeout(30*time.Second),
 		),
 	)
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		panic("failed to start PostgreSQL container: " + err.Error())
+	}
 
 	// Get PostgreSQL connection string
 	dbURL, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		panic("failed to get PostgreSQL connection string: " + err.Error())
+	}
 
 	// Connect to PostgreSQL
 	db, err := postgresRepo.Connect(dbURL)
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		panic("failed to connect to PostgreSQL: " + err.Error())
+	}
 
 	// Run migrations
-	runMigrations(t, db)
+	runSharedMigrations(db)
 
 	// Start Redis container
 	redisContainer, err := redis.RunContainer(ctx,
@@ -73,36 +78,130 @@ func setupTestContainers(t *testing.T) (*TestContainers, func()) {
 				WithStartupTimeout(10*time.Second),
 		),
 	)
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		panic("failed to start Redis container: " + err.Error())
+	}
 
 	// Get Redis connection string
 	redisAddr, err := redisContainer.ConnectionString(ctx)
-	Expect(err).NotTo(HaveOccurred())
-	
-	// Remove redis:// prefix if present
-	if strings.HasPrefix(redisAddr, "redis://") {
-		redisAddr = strings.TrimPrefix(redisAddr, "redis://")
+	if err != nil {
+		panic("failed to get Redis connection string: " + err.Error())
 	}
+
+	// Remove redis:// prefix if present
+	redisAddr = strings.TrimPrefix(redisAddr, "redis://")
 
 	// Create Redis cache client
 	logger, _ := zap.NewProduction()
 	redisCache, err := cache.NewRedisCache(redisAddr, "", 0, logger)
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		panic("failed to create Redis cache: " + err.Error())
+	}
 
-	containers := &TestContainers{
+	return &TestContainers{
 		PostgresContainer: pgContainer,
 		RedisContainer:    redisContainer,
 		DB:                db,
 		Cache:             redisCache,
 	}
+}
 
-	cleanup := func() {
-		db.Close()
-		pgContainer.Terminate(ctx)
-		redisContainer.Terminate(ctx)
+// cleanupSharedTestContainers terminates containers at the end of all tests
+func cleanupSharedTestContainers(containers *TestContainers) {
+	if containers == nil {
+		return
 	}
 
-	return containers, cleanup
+	ctx := context.Background()
+
+	if containers.DB != nil {
+		containers.DB.Close()
+	}
+	if containers.PostgresContainer != nil {
+		containers.PostgresContainer.Terminate(ctx)
+	}
+	if containers.RedisContainer != nil {
+		containers.RedisContainer.Terminate(ctx)
+	}
+}
+
+// runSharedMigrations applies all SQL migrations (for shared containers)
+func runSharedMigrations(db *sql.DB) {
+	migrations := []string{
+		"../migrations/001_create_users.up.sql",
+		"../migrations/002_create_posts.up.sql",
+		"../migrations/003_create_likes.up.sql",
+		"../migrations/004_create_comments.up.sql",
+		"../migrations/005_create_post_views.up.sql",
+		"../migrations/006_optimize_indexes.up.sql",
+	}
+
+	for _, migration := range migrations {
+		sql, err := os.ReadFile(migration)
+		if err != nil {
+			panic("failed to read migration " + migration + ": " + err.Error())
+		}
+
+		_, err = db.Exec(string(sql))
+		if err != nil {
+			panic("failed to run migration " + migration + ": " + err.Error())
+		}
+	}
+}
+
+// truncateAllTables cleans all tables between tests
+func truncateAllTables(t *testing.T, db *sql.DB) {
+	RegisterTestingT(t)
+	ctx := context.Background()
+
+	// Truncate tables in order to respect foreign key constraints
+	tables := []string{
+		"post_views", // Delete in order to respect foreign keys
+		"comments",
+		"likes",
+		"posts",
+		"users",
+	}
+
+	for _, table := range tables {
+		_, err := db.ExecContext(ctx, "TRUNCATE TABLE "+table+" CASCADE")
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	// Reset sequences
+	sequences := []string{
+		"users_id_seq",
+		"posts_id_seq",
+		"likes_id_seq",
+		"comments_id_seq",
+		"post_views_id_seq",
+	}
+
+	for _, seq := range sequences {
+		_, err := db.ExecContext(ctx, "ALTER SEQUENCE "+seq+" RESTART WITH 1")
+		Expect(err).NotTo(HaveOccurred())
+	}
+}
+
+// setupTestContainers returns shared containers with truncate cleanup
+func setupTestContainers(t *testing.T) (*TestContainers, func()) {
+	RegisterTestingT(t)
+
+	// Return shared containers with truncate cleanup
+	cleanup := func() {
+		truncateAllTables(t, sharedContainers.DB)
+
+		// Flush Redis cache
+		if sharedContainers.Cache != nil {
+			ctx := context.Background()
+			if err := sharedContainers.Cache.FlushAll(ctx); err != nil {
+				// Log error but don't fail the test
+				t.Logf("Warning: failed to flush Redis cache: %v", err)
+			}
+		}
+	}
+
+	return sharedContainers, cleanup
 }
 
 // runMigrations applies all SQL migrations
@@ -114,6 +213,8 @@ func runMigrations(t *testing.T, db *sql.DB) {
 		"../migrations/002_create_posts.up.sql",
 		"../migrations/003_create_likes.up.sql",
 		"../migrations/004_create_comments.up.sql",
+		"../migrations/005_create_post_views.up.sql",
+		"../migrations/006_optimize_indexes.up.sql",
 	}
 
 	for _, migration := range migrations {
@@ -125,30 +226,41 @@ func runMigrations(t *testing.T, db *sql.DB) {
 	}
 }
 
-// setupTestApp creates Fiber app with Testcontainers dependencies
+// setupTestApp creates Fiber app with shared Testcontainers dependencies
 func setupTestApp(t *testing.T) (*fiber.App, *TestContainers, func()) {
 	RegisterTestingT(t)
 
-	containers, cleanup := setupTestContainers(t)
+	cleanup := func() {
+		truncateAllTables(t, sharedContainers.DB)
+
+		// Flush Redis cache
+		if sharedContainers.Cache != nil {
+			ctx := context.Background()
+			if err := sharedContainers.Cache.FlushAll(ctx); err != nil {
+				// Log error but don't fail the test
+				t.Logf("Warning: failed to flush Redis cache: %v", err)
+			}
+		}
+	}
 
 	cfg := &config.Config{
-		JWTSecret:   "test-secret",
-		CacheTTL:    5 * time.Minute,
-		S3Endpoint:  "http://localhost:4566",
-		S3Bucket:    "test-bucket",
+		JWTSecret:  "test-secret",
+		CacheTTL:   5 * time.Minute,
+		S3Endpoint: "http://localhost:4566",
+		S3Bucket:   "test-bucket",
 	}
 
 	// Initialize repositories
-	userRepo := postgresRepo.NewUserRepository(containers.DB)
-	postRepo := postgresRepo.NewPostRepository(containers.DB)
-	likeRepo := postgresRepo.NewLikeRepository(containers.DB)
-	commentRepo := postgresRepo.NewCommentRepository(containers.DB)
+	userRepo := postgresRepo.NewUserRepository(sharedContainers.DB)
+	postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
+	likeRepo := postgresRepo.NewLikeRepository(sharedContainers.DB)
+	commentRepo := postgresRepo.NewCommentRepository(sharedContainers.DB)
 
 	// Initialize services
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret)
-	feedService := service.NewFeedService(postRepo, containers.Cache, cfg.CacheTTL)
+	feedService := service.NewFeedService(postRepo, sharedContainers.Cache, cfg.CacheTTL)
 	interactionService := service.NewInteractionService(likeRepo, commentRepo)
-	
+
 	// Create mock S3 storage for testing
 	mockStorage := NewMockMediaStorage()
 	postService := service.NewPostService(postRepo, mockStorage)
@@ -178,7 +290,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *TestContainers, func()) {
 	protected.Post("/posts/:id/like", interactionHandler.LikePost)
 	protected.Post("/posts/:id/comment", interactionHandler.CommentPost)
 
-	return app, containers, cleanup
+	return app, sharedContainers, cleanup
 }
 
 // Helper functions for creating test data
@@ -187,7 +299,7 @@ func createTestUser(t *testing.T, db *sql.DB, username, email string) *domain.Us
 
 	query := `INSERT INTO users (username, email, password, created_at, updated_at) 
 			  VALUES ($1, $2, $3, NOW(), NOW()) RETURNING id`
-	
+
 	hashedPassword := "$2a$10$testhash" // Mock bcrypt hash for testing
 	var userID uint
 	err := db.QueryRow(query, username, email, hashedPassword).Scan(&userID)
@@ -206,7 +318,7 @@ func createTestPost(t *testing.T, db *sql.DB, userID uint, title, caption string
 
 	query := `INSERT INTO posts (user_id, title, caption, media_type, media_url, likes_count, comments_count, views_count, created_at, updated_at) 
 			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()) RETURNING id`
-	
+
 	var postID uint
 	err := db.QueryRow(query, userID, title, caption, "image", "/uploads/test.jpg", 0, 0, 0).Scan(&postID)
 	Expect(err).NotTo(HaveOccurred())
@@ -231,7 +343,7 @@ func createTestPostWithEngagement(t *testing.T, db *sql.DB, userID uint, title s
 
 	query := `INSERT INTO posts (user_id, title, caption, media_type, media_url, likes_count, comments_count, views_count, created_at, updated_at) 
 			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW()) RETURNING id`
-	
+
 	var postID uint
 	err := db.QueryRow(query, userID, title, "Test caption", "image", "/uploads/test.jpg", likes, comments, views, createdAt).Scan(&postID)
 	Expect(err).NotTo(HaveOccurred())

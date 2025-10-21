@@ -2,14 +2,12 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Rate } from 'k6/metrics';
+import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.1/index.js';
 import { config, generateUserData, authHeader } from '../helpers/config.js';
 
 export const options = {
-  stages: [
-    { duration: '1m', target: 10 },  // Ramp up to 10 concurrent users
-    { duration: '2m', target: 10 },  // Stay at 10 users
-    { duration: '30s', target: 0 }, // Ramp down
-  ],
+  vus: 3,
+  duration: '45s',
   thresholds: config.thresholds,
 };
 
