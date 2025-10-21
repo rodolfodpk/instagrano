@@ -27,6 +27,7 @@ var _ = Describe("RedisCache", func() {
 
 			// When: Create Redis cache
 			logger, _ := zap.NewProduction()
+			defer logger.Sync()
 			redisCache, err := cache.NewRedisCache(redisAddr, "", 0, logger)
 
 			// Then: Should create successfully
@@ -40,6 +41,7 @@ var _ = Describe("RedisCache", func() {
 
 			// When: Create Redis cache with invalid address
 			logger, _ := zap.NewProduction()
+			defer logger.Sync()
 			redisCache, err := cache.NewRedisCache(invalidAddr, "", 0, logger)
 
 			// Then: Should return error
@@ -234,6 +236,9 @@ var _ = Describe("RedisCache", func() {
 			eventCh, err := cache.Subscribe(ctx, channel)
 			Expect(err).NotTo(HaveOccurred())
 
+			// Give subscription time to establish
+			time.Sleep(200 * time.Millisecond)
+
 			// When: Publish message
 			message := "test-message"
 			err = cache.Publish(ctx, channel, message)
@@ -243,7 +248,7 @@ var _ = Describe("RedisCache", func() {
 			select {
 			case receivedMessage := <-eventCh:
 				Expect(receivedMessage).To(Equal(message))
-			case <-time.After(5 * time.Second):
+			case <-time.After(500 * time.Millisecond):
 				Fail("timeout waiting for message")
 			}
 		})
@@ -261,7 +266,7 @@ var _ = Describe("RedisCache", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Give subscribers time to connect
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(200 * time.Millisecond)
 
 			// When: Publish message
 			message := "multi-message"
@@ -272,14 +277,14 @@ var _ = Describe("RedisCache", func() {
 			select {
 			case receivedMessage1 := <-eventCh1:
 				Expect(receivedMessage1).To(Equal(message))
-			case <-time.After(5 * time.Second):
+			case <-time.After(500 * time.Millisecond):
 				Fail("timeout waiting for message on subscriber 1")
 			}
 
 			select {
 			case receivedMessage2 := <-eventCh2:
 				Expect(receivedMessage2).To(Equal(message))
-			case <-time.After(5 * time.Second):
+			case <-time.After(500 * time.Millisecond):
 				Fail("timeout waiting for message on subscriber 2")
 			}
 		})

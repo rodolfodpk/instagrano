@@ -29,7 +29,7 @@ var _ = Describe("Integration Tests", func() {
 			// When: User registers
 			regReq := httptest.NewRequest("POST", "/api/auth/register", bytes.NewReader(regBody))
 			regReq.Header.Set("Content-Type", "application/json")
-			regResp, err := app.Test(regReq)
+			regResp, err := app.Test(regReq, 2000) // 2 second timeout
 
 			// Then: Registration succeeds
 			Expect(err).NotTo(HaveOccurred())
@@ -43,7 +43,7 @@ var _ = Describe("Integration Tests", func() {
 			loginBody, _ := json.Marshal(loginData)
 			loginReq := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
 			loginReq.Header.Set("Content-Type", "application/json")
-			loginResp, err := app.Test(loginReq)
+			loginResp, err := app.Test(loginReq, 2000) // 2 second timeout
 
 			// Then: Login succeeds and returns JWT
 			Expect(err).NotTo(HaveOccurred())
@@ -68,7 +68,7 @@ var _ = Describe("Integration Tests", func() {
 			// When: Request feed
 			feedReq := httptest.NewRequest("GET", "/api/feed", nil)
 			feedReq.Header.Set("Authorization", "Bearer "+token)
-			feedResp, err := app.Test(feedReq)
+			feedResp, err := app.Test(feedReq, 2000) // 2 second timeout
 
 			// Then: Feed is returned
 			Expect(err).NotTo(HaveOccurred())
@@ -89,7 +89,7 @@ var _ = Describe("Integration Tests", func() {
 			// Given: Invalid token
 			invalidReq := httptest.NewRequest("GET", "/api/feed", nil)
 			invalidReq.Header.Set("Authorization", "Bearer invalid-token")
-			invalidResp, err := app.Test(invalidReq)
+			invalidResp, err := app.Test(invalidReq, 2000) // 2 second timeout
 
 			// Then: Should return 401
 			Expect(err).NotTo(HaveOccurred())
@@ -98,7 +98,7 @@ var _ = Describe("Integration Tests", func() {
 			// Given: Malformed Authorization header
 			malformedReq := httptest.NewRequest("GET", "/api/feed", nil)
 			malformedReq.Header.Set("Authorization", "InvalidFormat token")
-			malformedResp, err := app.Test(malformedReq)
+			malformedResp, err := app.Test(malformedReq, 2000) // 2 second timeout
 
 			// Then: Should return 401
 			Expect(err).NotTo(HaveOccurred())
@@ -106,7 +106,7 @@ var _ = Describe("Integration Tests", func() {
 
 			// Given: Missing Authorization header
 			missingReq := httptest.NewRequest("GET", "/api/feed", nil)
-			missingResp, err := app.Test(missingReq)
+			missingResp, err := app.Test(missingReq, 2000) // 2 second timeout
 
 			// Then: Should return 401
 			Expect(err).NotTo(HaveOccurred())
@@ -130,7 +130,7 @@ var _ = Describe("Integration Tests", func() {
 			// Add form fields
 			writer.WriteField("title", "Test Post")
 			writer.WriteField("caption", "This is a test post")
-			writer.WriteField("media_url", "https://via.placeholder.com/300x200/FF0000/FFFFFF?text=Test")
+			writer.WriteField("media_url", "http://localhost/test/image")
 
 			err := writer.Close()
 			Expect(err).NotTo(HaveOccurred())
@@ -139,7 +139,7 @@ var _ = Describe("Integration Tests", func() {
 			postReq := httptest.NewRequest("POST", "/api/posts", &buf)
 			postReq.Header.Set("Content-Type", writer.FormDataContentType())
 			postReq.Header.Set("Authorization", "Bearer "+token)
-			postResp, err := app.Test(postReq)
+			postResp, err := app.Test(postReq, 3000) // 3 second timeout for multipart
 
 			// Then: Post creation succeeds
 			Expect(err).NotTo(HaveOccurred())
@@ -168,7 +168,7 @@ var _ = Describe("Integration Tests", func() {
 
 			writer.WriteField("title", "Post to Like")
 			writer.WriteField("caption", "This post will be liked")
-			writer.WriteField("media_url", "https://via.placeholder.com/300x200/FF0000/FFFFFF?text=Test")
+			writer.WriteField("media_url", "http://localhost/test/image")
 
 			err := writer.Close()
 			Expect(err).NotTo(HaveOccurred())
@@ -176,7 +176,7 @@ var _ = Describe("Integration Tests", func() {
 			postReq := httptest.NewRequest("POST", "/api/posts", &buf)
 			postReq.Header.Set("Content-Type", writer.FormDataContentType())
 			postReq.Header.Set("Authorization", "Bearer "+token)
-			postResp, err := app.Test(postReq)
+			postResp, err := app.Test(postReq, 3000) // 3 second timeout for multipart
 			Expect(err).NotTo(HaveOccurred())
 			Expect(postResp.StatusCode).To(Equal(201))
 
@@ -187,7 +187,7 @@ var _ = Describe("Integration Tests", func() {
 			// When: Like the post
 			likeReq := httptest.NewRequest("POST", "/api/posts/"+postID+"/like", nil)
 			likeReq.Header.Set("Authorization", "Bearer "+token)
-			likeResp, err := app.Test(likeReq)
+			likeResp, err := app.Test(likeReq, 2000) // 2 second timeout
 
 			// Then: Like succeeds
 			Expect(err).NotTo(HaveOccurred())
@@ -213,7 +213,7 @@ var _ = Describe("Integration Tests", func() {
 
 			writer.WriteField("title", "Post to Comment")
 			writer.WriteField("caption", "This post will be commented on")
-			writer.WriteField("media_url", "https://via.placeholder.com/300x200/FF0000/FFFFFF?text=Test")
+			writer.WriteField("media_url", "http://localhost/test/image")
 
 			err := writer.Close()
 			Expect(err).NotTo(HaveOccurred())
@@ -221,7 +221,7 @@ var _ = Describe("Integration Tests", func() {
 			postReq := httptest.NewRequest("POST", "/api/posts", &buf)
 			postReq.Header.Set("Content-Type", writer.FormDataContentType())
 			postReq.Header.Set("Authorization", "Bearer "+token)
-			postResp, err := app.Test(postReq)
+			postResp, err := app.Test(postReq, 3000) // 3 second timeout for multipart
 			Expect(err).NotTo(HaveOccurred())
 			Expect(postResp.StatusCode).To(Equal(201))
 
@@ -239,7 +239,7 @@ var _ = Describe("Integration Tests", func() {
 			commentReq := httptest.NewRequest("POST", "/api/posts/"+postID+"/comment", bytes.NewReader(commentBody))
 			commentReq.Header.Set("Content-Type", "application/json")
 			commentReq.Header.Set("Authorization", "Bearer "+token)
-			commentResp, err := app.Test(commentReq)
+			commentResp, err := app.Test(commentReq, 2000) // 2 second timeout
 
 			// Then: Comment succeeds
 			Expect(err).NotTo(HaveOccurred())

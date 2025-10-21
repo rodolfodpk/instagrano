@@ -18,6 +18,7 @@ type Cache interface {
 	FlushAll(ctx context.Context) error
 	Publish(ctx context.Context, channel string, message string) error
 	Subscribe(ctx context.Context, channel string) (<-chan string, error)
+	Close() error
 }
 
 // RedisCache implements the Cache interface using Redis
@@ -135,6 +136,7 @@ func (r *RedisCache) Subscribe(ctx context.Context, channel string) (<-chan stri
 	stringCh := make(chan string)
 	go func() {
 		defer close(stringCh)
+		defer pubsub.Close()
 		for msg := range ch {
 			select {
 			case stringCh <- msg.Payload:
@@ -145,4 +147,9 @@ func (r *RedisCache) Subscribe(ctx context.Context, channel string) (<-chan stri
 	}()
 
 	return stringCh, nil
+}
+
+// Close closes the Redis client connection
+func (r *RedisCache) Close() error {
+	return r.client.Close()
 }

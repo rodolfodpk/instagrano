@@ -1,33 +1,22 @@
 package tests
 
 import (
-	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"path/filepath"
 	"time"
-
-	"github.com/rodolfodpk/instagrano/internal/webclient"
 )
 
 // MockMediaStorage implements s3.MediaStorage interface for testing
 type MockMediaStorage struct {
-	files      map[string][]byte
-	httpClient webclient.HTTPClient
+	files map[string][]byte
 }
 
 // NewMockMediaStorage creates a new mock media storage
 func NewMockMediaStorage() *MockMediaStorage {
-	// Use mock controller config for tests
-	webclientConfig := webclient.Config{
-		UseMockController: false, // Disable mock controller to avoid URL rewriting issues
-		MockBaseURL:       "https://via.placeholder.com",
-		RealURLTimeout:    30 * time.Second, // Increase timeout
-	}
-
 	return &MockMediaStorage{
-		files:      make(map[string][]byte),
-		httpClient: webclient.NewDefaultHTTPClient(webclientConfig),
+		files: make(map[string][]byte),
 	}
 }
 
@@ -59,28 +48,22 @@ func (m *MockMediaStorage) GetFile(key string) ([]byte, bool) {
 	return content, exists
 }
 
-// UploadFromURL downloads media from a URL and stores it in memory
-func (m *MockMediaStorage) UploadFromURL(url string) (string, string, error) {
-	// Download from URL using webclient
-	result, err := m.httpClient.Download(context.Background(), url)
-	if err != nil {
-		return "", "", err
-	}
-	defer result.Content.(io.ReadCloser).Close()
-
-	// Read content
-	content, err := io.ReadAll(result.Content)
-	if err != nil {
-		return "", "", err
+// UploadFromURL simulates downloading media from a URL without making real HTTP requests
+func (m *MockMediaStorage) UploadFromURL(urlStr string) (string, string, error) {
+	// Validate URL format
+	parsedURL, err := url.Parse(urlStr)
+	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
+		return "", "", fmt.Errorf("invalid URL format: %s", urlStr)
 	}
 
-	// Store in memory
-	key := fmt.Sprintf("mock-s3/%s", filepath.Base(url))
-	m.files[key] = content
+	// Generate mock key and content (no real HTTP request)
+	key := fmt.Sprintf("mock-s3/url-%d", time.Now().Unix())
+	mockContent := []byte("mock-image-data")
+	m.files[key] = mockContent
 
-	contentType := result.ContentType
-	if contentType == "" {
-		contentType = "image/jpeg"
+	contentType := "image/jpeg"
+	if filepath.Ext(urlStr) == ".png" {
+		contentType = "image/png"
 	}
 
 	return key, contentType, nil

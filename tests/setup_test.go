@@ -97,6 +97,7 @@ var _ = BeforeSuite(func() {
 
 	// Create Redis cache client
 	logger, _ := zap.NewProduction()
+	defer logger.Sync()
 	redisCache, err := cache.NewRedisCache(redisAddr, "", 0, logger)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -119,6 +120,9 @@ var _ = AfterSuite(func() {
 		cancel()
 	}
 	if sharedContainers != nil {
+		if sharedContainers.Cache != nil {
+			sharedContainers.Cache.Close()
+		}
 		if sharedContainers.DB != nil {
 			sharedContainers.DB.Close()
 		}
@@ -270,6 +274,7 @@ func setupTestApp() (*fiber.App, *TestContainers, func()) {
 
 	// Initialize event publisher
 	logger, _ := zap.NewProduction()
+	defer logger.Sync()
 	eventPublisher := events.NewPublisher(sharedContainers.Cache, logger)
 
 	// Initialize handlers
@@ -291,13 +296,18 @@ func setupTestApp() (*fiber.App, *TestContainers, func()) {
 	api.Post("/auth/register", authHandler.Register)
 	api.Post("/auth/login", authHandler.Login)
 
+	// SSE endpoint handles its own authentication via query parameter
+	api.Get("/events/stream", sseHandler.Stream)
+
+	// Serve static test image
+	app.Static("/test/image", "./web/public/test-image.jpg")
+
 	protected := api.Group("/", middleware.JWT(cfg.JWTSecret))
 	protected.Get("/feed", feedHandler.GetFeed)
 	protected.Post("/posts", postHandler.CreatePost)
 	protected.Get("/posts/:id", postHandler.GetPost)
 	protected.Post("/posts/:id/like", interactionHandler.LikePost)
 	protected.Post("/posts/:id/comment", interactionHandler.CommentPost)
-	protected.Get("/events/stream", sseHandler.Stream)
 
 	return app, sharedContainers, cleanup
 }

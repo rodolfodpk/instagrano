@@ -32,8 +32,9 @@ var _ = Describe("PostHandler", func() {
 			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
 			mockStorage := NewMockMediaStorage()
 			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
-			
+
 			logger, _ := zap.NewProduction()
+			defer logger.Sync()
 			eventPublisher := events.NewPublisher(sharedContainers.Cache, logger)
 			postHandler := handler.NewPostHandler(postService, eventPublisher, logger)
 
@@ -60,8 +61,9 @@ var _ = Describe("PostHandler", func() {
 			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
 			mockStorage := NewMockMediaStorage()
 			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
-			
+
 			logger, _ := zap.NewProduction()
+			defer logger.Sync()
 			eventPublisher := events.NewPublisher(sharedContainers.Cache, logger)
 			postHandler := handler.NewPostHandler(postService, eventPublisher, logger)
 
@@ -83,8 +85,9 @@ var _ = Describe("PostHandler", func() {
 			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
 			mockStorage := NewMockMediaStorage()
 			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
-			
+
 			logger, _ := zap.NewProduction()
+			defer logger.Sync()
 			eventPublisher := events.NewPublisher(sharedContainers.Cache, logger)
 			postHandler := handler.NewPostHandler(postService, eventPublisher, logger)
 
@@ -113,8 +116,9 @@ var _ = Describe("PostHandler", func() {
 			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
 			mockStorage := NewMockMediaStorage()
 			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
-			
+
 			logger, _ := zap.NewProduction()
+			defer logger.Sync()
 			eventPublisher := events.NewPublisher(sharedContainers.Cache, logger)
 			postHandler := handler.NewPostHandler(postService, eventPublisher, logger)
 
@@ -127,13 +131,13 @@ var _ = Describe("PostHandler", func() {
 			// When: Create post
 			var buf bytes.Buffer
 			writer := multipart.NewWriter(&buf)
-			
+
 			writer.WriteField("title", "New Post")
 			writer.WriteField("caption", "New Caption")
 			writer.WriteField("media_url", "https://via.placeholder.com/300x200/FF0000/FFFFFF?text=Test")
-			
+
 			writer.Close()
-			
+
 			req := httptest.NewRequest("POST", "/posts", &buf)
 			req.Header.Set("Content-Type", writer.FormDataContentType())
 			req.Header.Set("Authorization", "Bearer "+token)
@@ -141,14 +145,14 @@ var _ = Describe("PostHandler", func() {
 
 			// Then: Should create post successfully
 			Expect(err).NotTo(HaveOccurred())
-			
+
 			// Debug: Check response body if status is not 201
 			if resp.StatusCode != 201 {
 				var errorResponse map[string]interface{}
 				json.NewDecoder(resp.Body).Decode(&errorResponse)
 				fmt.Printf("Error response: %+v\n", errorResponse)
 			}
-			
+
 			Expect(resp.StatusCode).To(Equal(201))
 
 			var response map[string]interface{}
@@ -162,8 +166,9 @@ var _ = Describe("PostHandler", func() {
 			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
 			mockStorage := NewMockMediaStorage()
 			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
-			
+
 			logger, _ := zap.NewProduction()
+			defer logger.Sync()
 			eventPublisher := events.NewPublisher(sharedContainers.Cache, logger)
 			postHandler := handler.NewPostHandler(postService, eventPublisher, logger)
 
@@ -197,8 +202,9 @@ var _ = Describe("PostHandler", func() {
 			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
 			mockStorage := NewMockMediaStorage()
 			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
-			
+
 			logger, _ := zap.NewProduction()
+			defer logger.Sync()
 			eventPublisher := events.NewPublisher(sharedContainers.Cache, logger)
 			postHandler := handler.NewPostHandler(postService, eventPublisher, logger)
 

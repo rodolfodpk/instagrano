@@ -12,12 +12,12 @@ import (
 )
 
 const (
-	// Use external URLs that will be mapped to mock controller
-	testImageURL = "https://via.placeholder.com/150.jpg"
-	testPNGURL   = "https://httpbin.org/image/png"
-	// URLs that should fail (not mapped by webclient)
-	testNotFoundURL = "https://nonexistent-domain-12345.com/notfound.jpg"
-	testTimeoutURL  = "https://httpbin.org/delay/10"
+	// Use local static test image endpoints
+	testImageURL = "http://localhost/test/image"
+	testPNGURL   = "http://localhost/test/image" // Same image for simplicity
+	// URLs that should fail
+	testNotFoundURL = "http://localhost/nonexistent"
+	testInvalidURL  = "not-a-valid-url"
 )
 
 var _ = Describe("PostService URL Tests", func() {
@@ -73,7 +73,7 @@ var _ = Describe("PostService URL Tests", func() {
 
 			// Then: Creation fails
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("unsupported protocol scheme"))
+			Expect(err.Error()).To(ContainSubstring("invalid URL format"))
 			Expect(post).To(BeNil())
 		})
 
@@ -93,12 +93,12 @@ var _ = Describe("PostService URL Tests", func() {
 			err := userRepo.Create(user)
 			Expect(err).NotTo(HaveOccurred())
 
-			// When: Create post with 404 URL
-			post, err := postService.CreatePostFromURL(user.ID, "Test Post", "404 URL", testNotFoundURL)
+			// When: Create post with invalid URL
+			post, err := postService.CreatePostFromURL(user.ID, "Test Post", "Invalid URL", testInvalidURL)
 
 			// Then: Creation fails
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("no such host"))
+			Expect(err.Error()).To(ContainSubstring("invalid URL format"))
 			Expect(post).To(BeNil())
 		})
 

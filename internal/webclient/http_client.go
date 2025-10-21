@@ -23,7 +23,7 @@ type HTTPClient interface {
 
 // DownloadResult contains the downloaded content and metadata
 type DownloadResult struct {
-	Content     io.Reader
+	Content     io.ReadCloser
 	ContentType string
 	Size        int64
 	StatusCode  int

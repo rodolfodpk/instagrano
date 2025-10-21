@@ -46,7 +46,7 @@ func (h *SSEHandler) Stream(c *fiber.Ctx) error {
 	// Validate JWT token
 	userID, err := h.validateJWT(token)
 	if err != nil {
-		h.logger.Warn("SSE token validation failed", 
+		h.logger.Warn("SSE token validation failed",
 			zap.Error(err),
 			zap.String("token", token[:min(len(token), 20)]+"..."))
 		return c.Status(401).JSON(fiber.Map{"error": "invalid token"})
@@ -81,8 +81,8 @@ func (h *SSEHandler) Stream(c *fiber.Ctx) error {
 		"user_id": userID,
 	})
 
-	// Send heartbeat every 30 seconds
-	heartbeatTicker := time.NewTicker(30 * time.Second)
+	// Send heartbeat every 5 seconds
+	heartbeatTicker := time.NewTicker(5 * time.Second)
 	defer heartbeatTicker.Stop()
 
 	// Process events

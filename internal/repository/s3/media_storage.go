@@ -118,7 +118,7 @@ func (s *localStackS3Storage) UploadFromURL(url string) (string, string, error) 
 		s.logger.Error("failed to download from URL", zap.String("url", url), zap.Error(err))
 		return "", "", fmt.Errorf("failed to download from URL: %w", err)
 	}
-	defer result.Content.(io.ReadCloser).Close()
+	defer result.Content.Close()
 
 	// Generate filename from URL
 	filename := filepath.Base(url)
