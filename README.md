@@ -406,7 +406,9 @@ Based on testing with Redis caching enabled:
 | POST /api/auth/login | ~50ms | N/A | N/A |
 | POST /api/posts | ~300ms | N/A | N/A |
 
-For detailed K6 test documentation, see [tests/k6/README.md](tests/k6/README.md).
+For detailed K6 test results and performance metrics, see [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+
+For K6 test implementation details, see [tests/k6/README.md](tests/k6/README.md).
 
 ## API Documentation
 
