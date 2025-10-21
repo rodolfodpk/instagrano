@@ -10,14 +10,22 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-go@v5
-      with: {go-version: '1.23.x'}
+      with: 
+        go-version: '1.23.4'
+        cache: true
     - name: Install Docker Compose
       run: |
         sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
         sudo chmod +x /usr/local/bin/docker-compose
     - name: Start Docker daemon
       run: sudo systemctl start docker
-    - run: go mod download
-    - run: go test -race -v ./tests/...
+    - name: Verify Go installation
+      run: |
+        go version
+        go env
+    - name: Download dependencies
+      run: go mod download
+    - name: Run tests
+      run: go test -race -v ./tests/...
       env:
         TESTCONTAINERS_RYUK_DISABLED: true
