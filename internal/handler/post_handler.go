@@ -18,15 +18,16 @@ func NewPostHandler(postService *service.PostService) *PostHandler {
 
 // CreatePost godoc
 // @Summary      Create a new post
-// @Description  Upload image/video post with title and caption
+// @Description  Upload image/video post with title and caption (file upload or URL)
 // @Tags         posts
 // @Accept       multipart/form-data
 // @Produce      json
 // @Security     BearerAuth
 // @Param        title       formData  string  true   "Post title"
 // @Param        caption     formData  string  false  "Post caption"
-// @Param        media_type  formData  string  true   "Media type (image or video)"
-// @Param        media       formData  file    true   "Media file"
+// @Param        media_type  formData  string  false  "Media type (image or video) - required for file upload"
+// @Param        media       formData  file    false  "Media file (alternative to media_url)"
+// @Param        media_url   formData  string  false  "Media URL (alternative to file upload)"
 // @Success      201  {object}  domain.Post
 // @Failure      400  {object}  object{error=string}
 // @Router       /posts [post]
@@ -41,12 +42,23 @@ func (h *PostHandler) CreatePost(c *fiber.Ctx) error {
 
 	title := c.FormValue("title")
 	caption := c.FormValue("caption")
-	mediaTypeStr := c.FormValue("media_type")
+	mediaURL := c.FormValue("media_url") // NEW: URL input
 
 	if title == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "title is required"})
 	}
 
+	// Check if URL is provided
+	if mediaURL != "" {
+		post, err := h.postService.CreatePostFromURL(userID, title, caption, mediaURL)
+		if err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.Status(201).JSON(post)
+	}
+
+	// Otherwise, handle file upload (existing logic)
+	mediaTypeStr := c.FormValue("media_type")
 	mediaType := domain.MediaType(mediaTypeStr)
 	if mediaType != domain.MediaTypeImage && mediaType != domain.MediaTypeVideo {
 		mediaType = domain.MediaTypeImage // default
@@ -55,7 +67,7 @@ func (h *PostHandler) CreatePost(c *fiber.Ctx) error {
 	// Get uploaded file
 	file, err := c.FormFile("media")
 	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "media file is required"})
+		return c.Status(400).JSON(fiber.Map{"error": "either media file or media_url is required"})
 	}
 
 	// Open file

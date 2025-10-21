@@ -32,6 +32,7 @@ import (
 	"github.com/rodolfodpk/instagrano/internal/repository/postgres"
 	"github.com/rodolfodpk/instagrano/internal/repository/s3"
 	"github.com/rodolfodpk/instagrano/internal/service"
+	"github.com/rodolfodpk/instagrano/internal/webclient"
 	"go.uber.org/zap"
 )
 
@@ -61,11 +62,19 @@ func main() {
 
 	appLogger.Info("database connected successfully")
 
-	// Initialize S3 media storage
+	// Create webclient config
+	webclientConfig := webclient.Config{
+		UseMockController: cfg.WebclientUseMock,
+		MockBaseURL:       cfg.WebclientMockBaseURL,
+		RealURLTimeout:    cfg.WebclientTimeout,
+	}
+
+	// Initialize S3 media storage with webclient config
 	mediaStorage, err := s3.NewMediaStorage(
 		cfg.S3Endpoint,
-		"us-east-1",
+		cfg.S3Region,
 		cfg.S3Bucket,
+		webclientConfig,
 	)
 	if err != nil {
 		appLogger.Fatal("s3 connection failed", zap.Error(err))
@@ -74,6 +83,7 @@ func main() {
 	appLogger.Info("s3 storage initialized",
 		zap.String("endpoint", cfg.S3Endpoint),
 		zap.String("bucket", cfg.S3Bucket),
+		zap.Bool("webclient_use_mock", cfg.WebclientUseMock),
 	)
 
 	// Initialize Redis cache
@@ -92,18 +102,22 @@ func main() {
 	postRepo := postgres.NewPostRepository(db)
 	likeRepo := postgres.NewLikeRepository(db)
 	commentRepo := postgres.NewCommentRepository(db)
+	viewRepo := postgres.NewPostViewRepository(db)
 
 	// Initialize services
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret)
 	postService := service.NewPostService(postRepo, mediaStorage)
 	feedService := service.NewFeedService(postRepo, redisCache, cfg.CacheTTL)
 	interactionService := service.NewInteractionService(likeRepo, commentRepo)
+	viewService := service.NewPostViewService(viewRepo)
 
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(authService)
 	postHandler := handler.NewPostHandler(postService)
 	feedHandler := handler.NewFeedHandler(feedService, cfg)
 	interactionHandler := handler.NewInteractionHandler(interactionService)
+	viewHandler := handler.NewPostViewHandler(viewService)
+	testImageHandler := handler.NewTestImageHandler()
 
 	app := fiber.New()
 
@@ -138,6 +152,16 @@ func main() {
 		})
 	})
 
+	// Test image routes (no auth required - register EARLY)
+	test := app.Group("/test")
+	test.Get("/image", testImageHandler.ServeTestImage)
+	test.Get("/image/png", testImageHandler.ServeTestPNG)
+
+	appLogger.Info("registering test image routes",
+		zap.String("path", "/test/image"),
+		zap.String("path_png", "/test/image/png"),
+	)
+
 	// Serve static files
 	app.Static("/static", "./web/public")
 
@@ -156,6 +180,8 @@ func main() {
 	protected.Get("/posts/:id", postHandler.GetPost)
 	protected.Post("/posts/:id/like", interactionHandler.LikePost)
 	protected.Post("/posts/:id/comment", interactionHandler.CommentPost)
+	protected.Post("/posts/:id/view/start", viewHandler.StartView)
+	protected.Post("/posts/:id/view/end", viewHandler.EndView)
 	protected.Get("/feed", feedHandler.GetFeed)
 
 	appLogger.Info("server starting",

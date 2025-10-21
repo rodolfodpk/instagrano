@@ -282,3 +282,7 @@ func (m *FailingMockStorage) Upload(file io.Reader, filename, contentType string
 func (m *FailingMockStorage) GetURL(key string) string {
 	return "http://failing-mock-s3.example.com/" + key
 }
+
+func (m *FailingMockStorage) UploadFromURL(url string) (string, string, error) {
+	return "", "", fmt.Errorf("mock S3 upload from URL failure")
+}

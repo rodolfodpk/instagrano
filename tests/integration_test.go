@@ -123,19 +123,19 @@ func TestPostCreation(t *testing.T) {
 	// Given: Post data as multipart form
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
-	
+
 	// Add form fields
 	writer.WriteField("title", "Test Post")
 	writer.WriteField("caption", "This is a test post")
 	writer.WriteField("media_type", "image")
-	
+
 	// Add file
 	fileWriter, err := writer.CreateFormFile("media", "test.jpg")
 	Expect(err).NotTo(HaveOccurred())
-	
+
 	_, err = fileWriter.Write([]byte("fake image content"))
 	Expect(err).NotTo(HaveOccurred())
-	
+
 	err = writer.Close()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -168,17 +168,17 @@ func TestLikePost(t *testing.T) {
 	// Given: A post exists (we'll create one)
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
-	
+
 	writer.WriteField("title", "Post to Like")
 	writer.WriteField("caption", "This post will be liked")
 	writer.WriteField("media_type", "image")
-	
+
 	fileWriter, err := writer.CreateFormFile("media", "test.jpg")
 	Expect(err).NotTo(HaveOccurred())
-	
+
 	_, err = fileWriter.Write([]byte("fake image content"))
 	Expect(err).NotTo(HaveOccurred())
-	
+
 	err = writer.Close()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -220,17 +220,17 @@ func TestCommentPost(t *testing.T) {
 	// Given: A post exists
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
-	
+
 	writer.WriteField("title", "Post to Comment")
 	writer.WriteField("caption", "This post will be commented on")
 	writer.WriteField("media_type", "image")
-	
+
 	fileWriter, err := writer.CreateFormFile("media", "test.jpg")
 	Expect(err).NotTo(HaveOccurred())
-	
+
 	_, err = fileWriter.Write([]byte("fake image content"))
 	Expect(err).NotTo(HaveOccurred())
-	
+
 	err = writer.Close()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -265,4 +265,39 @@ func TestCommentPost(t *testing.T) {
 	json.NewDecoder(commentResp.Body).Decode(&commentResult)
 	Expect(commentResult).To(HaveKey("message"))
 	Expect(commentResult["message"]).To(Equal("comment added"))
+}
+
+func TestPostCreationFromURL(t *testing.T) {
+	RegisterTestingT(t)
+
+	// Setup: Testcontainers start automatically!
+	app, _, cleanup := setupTestApp(t)
+	defer cleanup()
+
+	// Register and login
+	token := registerAndLogin(t, app, "urluser", "url@example.com", "password123")
+
+	// Create post from URL using multipart form
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+
+	writer.WriteField("title", "Post from URL")
+	writer.WriteField("caption", "Downloaded from external URL")
+	writer.WriteField("media_url", "https://via.placeholder.com/150.jpg")
+	writer.Close()
+
+	req := httptest.NewRequest("POST", "/api/posts", &buf)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := app.Test(req)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(resp.StatusCode).To(Equal(201))
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	Expect(result["id"]).To(BeNumerically(">", 0))
+	Expect(result["media_url"]).To(ContainSubstring("mock-s3"))
+	Expect(result["title"]).To(Equal("Post from URL"))
+	Expect(result["caption"]).To(Equal("Downloaded from external URL"))
 }

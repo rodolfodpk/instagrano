@@ -1,39 +1,31 @@
-# 🚀 Instagrano MVP
+# Instagrano MVP
 
 [![Test Coverage](https://img.shields.io/badge/coverage-81.9%25-brightgreen)](https://github.com/rodolfodpk/instagrano)
 
-A mini Instagram API built with Go Fiber, PostgreSQL, Redis caching, LocalStack S3, Zap structured logging, Testcontainers testing, Gomega BDD assertions, Docker Compose, and JWT authentication.
+A mini Instagram API built with Go Fiber, PostgreSQL, Redis, LocalStack S3, Zap logging, Testcontainers, Gomega, Docker Compose, and JWT authentication.
 
 ## Features
 
-- **Redis Caching**: High-performance feed caching with 10x speedup for cached requests
-- **Structured Logging**: High-performance Zap logger with JSON output and request correlation IDs
-- **Cursor-Based Pagination**: Efficient pagination for large datasets with consistent results
-- **S3 Integration**: LocalStack S3-compatible storage for media files with CORS support
-- **JWT Authentication**: Secure token-based authentication
-- **Real-time Feed**: Hybrid scoring algorithm combining time decay and engagement metrics
-- **File Upload**: Support for images and videos with proper content type validation
-- **Interactive Frontend**: Alpine.js-powered UI with "Load More" functionality
+- Redis caching with feed performance optimization
+- Structured logging with Zap
+- Cursor-based pagination
+- S3-compatible storage via LocalStack
+- JWT authentication
+- Feed scoring algorithm (time decay + engagement)
+- File upload (images/videos)
+- Frontend with Alpine.js
+- View time tracking
 
 ## Quick Start
 
 ```bash
-# Start database, LocalStack S3, AND Redis
+# Run tests (uses Testcontainers - no setup needed)
+make test-full
+
+# For development with frontend:
 make docker-up
-
-# Verify services are running
-curl http://localhost:4566/_localstack/health  # LocalStack
-docker-compose exec postgres pg_isready -U postgres  # PostgreSQL
-docker-compose exec redis redis-cli ping       # Redis
-
-# Run migrations
 make migrate
-
-# Start server (will connect to PostgreSQL, S3, and Redis)
 make start
-
-# Run integration tests (in another terminal)
-make itest
 ```
 
 ## API Endpoints
@@ -42,10 +34,12 @@ make itest
 - `POST /api/auth/register` - User registration
 - `POST /api/auth/login` - User login
 - `GET /api/me` - Get current user (requires JWT)
-- `POST /api/posts` - Create post with file upload (requires JWT)
+- `POST /api/posts` - Create post with file upload or URL (requires JWT)
 - `GET /api/posts/:id` - Get specific post (requires JWT)
 - `POST /api/posts/:id/like` - Like a post (requires JWT)
 - `POST /api/posts/:id/comment` - Comment on a post (requires JWT)
+- `POST /api/posts/:id/view/start` - Start tracking view time (requires JWT)
+- `POST /api/posts/:id/view/end` - End tracking and record duration (requires JWT)
 - `GET /api/feed` - Get user feed (requires JWT)
 
 ### Feed Pagination
@@ -94,8 +88,9 @@ Open: http://localhost:8080/feed.html (after logging in at http://localhost:8080
 The frontend includes:
 - **Login/Registration**: Tabbed interface for user authentication
 - **Feed with Load More**: Cursor-based pagination with "Load More" button
-- **Post Creation**: File upload with image/video support
+- **Post Creation**: File upload with image/video support or URL-based media
 - **Interactions**: Like and comment functionality
+- **View Time Tracking**: Automatic tracking using Intersection Observer
 
 ## Redis Caching
 
@@ -156,6 +151,46 @@ Cache operations are logged with structured fields for monitoring:
 - ✅ **Pros**: 10x faster responses, reduced DB load, horizontally scalable
 - ⚠️ **Cons**: Data up to 5 minutes stale, additional service dependency, memory usage
 
+## View Time Tracking
+
+The application automatically tracks how long users spend viewing each post using Intersection Observer API.
+
+**How it works:**
+- **Automatic Detection**: Posts are tracked when 50%+ visible for 1+ second
+- **Duration Calculation**: Time between view start and end is recorded
+- **Database Storage**: View sessions stored in `post_views` table
+- **Counter Updates**: `views_count` incremented for each view start
+
+**API Endpoints:**
+```bash
+# Start tracking (called automatically by frontend)
+POST /api/posts/:id/view/start
+# Returns: {"id": 1, "user_id": 1, "post_id": 5, "started_at": "2024-01-15T10:30:00Z"}
+
+# End tracking (called automatically by frontend)  
+POST /api/posts/:id/view/end
+# Body: {"started_at": "2024-01-15T10:30:00Z"}
+# Returns: {"message": "view ended"}
+```
+
+**Frontend Implementation:**
+- Uses Intersection Observer to detect viewport visibility
+- Tracks active view sessions in Alpine.js state
+- Automatically ends views on page unload
+- Handles multiple views of same post gracefully
+
+**Database Schema:**
+```sql
+CREATE TABLE post_views (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id),
+    post_id INT REFERENCES posts(id),
+    started_at TIMESTAMP NOT NULL,
+    ended_at TIMESTAMP,
+    duration_seconds INT
+);
+```
+
 ## Structured Logging
 
 The application uses Zap for high-performance structured logging:
@@ -207,6 +242,34 @@ grep '"cache miss"' logs/app.log
               │   S3 Storage    │ │     Cache       │
               └─────────────────┘ └─────────────────┘
 ```
+
+## Post Creation
+
+You can create posts in two ways:
+
+### File Upload
+```bash
+curl -X POST http://localhost:8080/api/posts \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "title=My Post" \
+  -F "caption=Uploaded file" \
+  -F "media_type=image" \
+  -F "media=@/path/to/image.jpg"
+```
+
+### URL-Based Media
+```bash
+curl -X POST http://localhost:8080/api/posts \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "title=My Post" \
+  -F "caption=From URL" \
+  -F "media_url=https://example.com/image.jpg"
+```
+
+The system will:
+1. Download the media from the URL
+2. Upload it to S3/LocalStack
+3. Create the post with the S3 URL
 
 ## Development
 

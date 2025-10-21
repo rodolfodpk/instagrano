@@ -1,4 +1,4 @@
-.PHONY: run test docker-up docker-down migrate clean stop start restart itest health swagger swagger-ui start-all k6-install k6-auth k6-cache k6-posts k6-journey k6-all
+.PHONY: run test docker-up docker-down migrate clean stop start restart itest health swagger swagger-ui start-all k6-install k6-auth k6-cache k6-posts k6-posts-url k6-journey k6-all
 
 # Defaults (can be overridden)
 PORT ?= 8080
@@ -38,6 +38,8 @@ migrate:
 	docker exec -i instagrano-postgres-1 psql -U postgres -d instagrano < migrations/002_create_posts.up.sql
 	docker exec -i instagrano-postgres-1 psql -U postgres -d instagrano < migrations/003_create_likes.up.sql
 	docker exec -i instagrano-postgres-1 psql -U postgres -d instagrano < migrations/004_create_comments.up.sql
+	docker exec -i instagrano-postgres-1 psql -U postgres -d instagrano < migrations/005_create_post_views.up.sql
+	docker exec -i instagrano-postgres-1 psql -U postgres -d instagrano < migrations/006_optimize_indexes.up.sql
 
 clean:
 	docker-compose down --volumes
@@ -97,6 +99,10 @@ k6-posts:
 	@echo "Running K6 post creation load test..."
 	@k6 run tests/k6/scenarios/posts.js
 
+k6-posts-url:
+	@echo "Running K6 post creation from URL test..."
+	@k6 run tests/k6/scenarios/posts-url.js
+
 k6-journey:
 	@echo "Running K6 full user journey test..."
 	@k6 run tests/k6/scenarios/user-journey.js
@@ -106,4 +112,5 @@ k6-all: k6-install
 	@k6 run tests/k6/scenarios/auth.js
 	@k6 run tests/k6/scenarios/feed-cache.js
 	@k6 run tests/k6/scenarios/posts.js
+	@k6 run tests/k6/scenarios/posts-url.js
 	@k6 run tests/k6/scenarios/user-journey.js

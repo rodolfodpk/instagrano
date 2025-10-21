@@ -12,6 +12,7 @@ type Config struct {
 	DatabaseURL     string
 	S3Endpoint      string
 	S3Bucket        string
+	S3Region        string
 	JWTSecret       string
 	Port            string
 	LogLevel        string
@@ -22,6 +23,11 @@ type Config struct {
 	RedisPassword   string
 	RedisDB         int
 	CacheTTL        time.Duration
+
+	// Webclient configuration
+	WebclientUseMock     bool
+	WebclientMockBaseURL string
+	WebclientTimeout     time.Duration
 }
 
 func Load() *Config {
@@ -29,6 +35,7 @@ func Load() *Config {
 		DatabaseURL:     getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5433/instagrano?sslmode=disable"),
 		S3Endpoint:      getEnv("S3_ENDPOINT", "http://localhost:4566"),
 		S3Bucket:        getEnv("S3_BUCKET", "instagrano-media"),
+		S3Region:        getEnv("S3_REGION", "us-east-1"),
 		JWTSecret:       getEnv("JWT_SECRET", "dev-secret"),
 		Port:            getEnv("PORT", "8080"),
 		LogLevel:        getEnv("LOG_LEVEL", "info"),
@@ -39,6 +46,11 @@ func Load() *Config {
 		RedisPassword:   getEnv("REDIS_PASSWORD", ""),
 		RedisDB:         getEnvInt("REDIS_DB", 0),
 		CacheTTL:        getDurationEnv("CACHE_TTL", 5*time.Minute),
+
+		// Webclient configuration
+		WebclientUseMock:     getBoolEnv("WEBCLIENT_USE_MOCK", true),
+		WebclientMockBaseURL: getEnv("WEBCLIENT_MOCK_BASE_URL", "http://localhost:8080"),
+		WebclientTimeout:     getDurationEnv("WEBCLIENT_TIMEOUT", 30*time.Second),
 	}
 }
 
@@ -77,6 +89,15 @@ func getDurationEnv(key string, defaultValue time.Duration) time.Duration {
 	if value, ok := os.LookupEnv(key); ok {
 		if duration, err := time.ParseDuration(value); err == nil {
 			return duration
+		}
+	}
+	return defaultValue
+}
+
+func getBoolEnv(key string, defaultValue bool) bool {
+	if value, ok := os.LookupEnv(key); ok {
+		if boolValue, err := strconv.ParseBool(value); err == nil {
+			return boolValue
 		}
 	}
 	return defaultValue
