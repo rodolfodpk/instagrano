@@ -40,9 +40,10 @@ export function authHeader(token) {
   };
 }
 
-// Helper function to log cache performance comparison
+// Helper function to log cache performance comparison (disabled for cleaner output)
 export function logCacheComparison(coldDuration, warmDuration) {
-  const improvement = ((coldDuration - warmDuration) / coldDuration * 100).toFixed(1);
-  console.log(`Cache Performance: Cold=${coldDuration}ms, Warm=${warmDuration}ms, Improvement=${improvement}%`);
+  // Logging disabled to reduce K6 test verbosity
+  // const improvement = ((coldDuration - warmDuration) / coldDuration * 100).toFixed(1);
+  // console.log(`Cache Performance: Cold=${coldDuration}ms, Warm=${warmDuration}ms, Improvement=${improvement}%`);
 }
 

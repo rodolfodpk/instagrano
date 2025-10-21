@@ -88,33 +88,33 @@ k6-install:
 
 k6-auth:
 	@echo "Running K6 authentication load test..."
-	@k6 run tests/k6/scenarios/auth.js
+	@k6 run --log-output=none tests/k6/scenarios/auth.js
 
 k6-cache:
 	@echo "Running K6 cache performance test..."
-	@k6 run tests/k6/scenarios/feed-cache.js
+	@k6 run --log-output=none tests/k6/scenarios/feed-cache.js
 
 k6-posts:
 	@echo "Running K6 post creation load test..."
-	@k6 run tests/k6/scenarios/posts.js
+	@k6 run --log-output=none tests/k6/scenarios/posts.js
 
 k6-posts-url:
 	@echo "Running K6 post creation from URL test..."
-	@k6 run tests/k6/scenarios/posts-url.js
+	@k6 run --log-output=none tests/k6/scenarios/posts-url.js
 
 k6-journey:
 	@echo "Running K6 full user journey test..."
-	@k6 run tests/k6/scenarios/user-journey.js
+	@k6 run --log-output=none tests/k6/scenarios/user-journey.js
 
 k6-post-retrieval:
 	@echo "Running K6 post retrieval cache test..."
-	@k6 run tests/k6/scenarios/post-retrieval.js
+	@k6 run --log-output=none tests/k6/scenarios/post-retrieval.js
 
 k6-all: k6-install
 	@echo "Running all K6 performance tests..."
-	@k6 run tests/k6/scenarios/auth.js
-	@k6 run tests/k6/scenarios/feed-cache.js
-	@k6 run tests/k6/scenarios/posts.js
-	@k6 run tests/k6/scenarios/posts-url.js
-	@k6 run tests/k6/scenarios/post-retrieval.js
-	@k6 run tests/k6/scenarios/user-journey.js
+	@k6 run --log-output=none tests/k6/scenarios/auth.js
+	@k6 run --log-output=none tests/k6/scenarios/feed-cache.js
+	@k6 run --log-output=none tests/k6/scenarios/posts.js
+	@k6 run --log-output=none tests/k6/scenarios/posts-url.js
+	@k6 run --log-output=none tests/k6/scenarios/post-retrieval.js
+	@k6 run --log-output=none tests/k6/scenarios/user-journey.js

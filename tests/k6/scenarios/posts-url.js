@@ -9,10 +9,12 @@ export const options = {
   thresholds: config.thresholds,
 };
 
+// Use local test endpoint for reliable K6 testing
+// Note: The application still supports external URLs for real user input
 const TEST_IMAGE_URLS = [
-  'https://via.placeholder.com/150.jpg',
-  'https://httpbin.org/image/png',
-  'https://example.com/test.jpg',
+  'http://localhost:8080/test/image',
+  'http://localhost:8080/test/image',
+  'http://localhost:8080/test/image',
 ];
 
 export default function () {
@@ -39,7 +41,7 @@ export default function () {
   
   sleep(1);
   
-  // Create post from URL
+  // Create post from URL (using local test endpoint for K6 reliability)
   const randomURL = TEST_IMAGE_URLS[Math.floor(Math.random() * TEST_IMAGE_URLS.length)];
   
   // Create post from URL using manual multipart construction
