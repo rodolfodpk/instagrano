@@ -16,6 +16,8 @@ type Cache interface {
 	Delete(ctx context.Context, key string) error
 	Ping(ctx context.Context) error
 	FlushAll(ctx context.Context) error
+	Publish(ctx context.Context, channel string, message string) error
+	Subscribe(ctx context.Context, channel string) (<-chan string, error)
 }
 
 // RedisCache implements the Cache interface using Redis
@@ -107,4 +109,40 @@ func (r *RedisCache) FlushAll(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+// Publish sends a message to a Redis channel
+func (r *RedisCache) Publish(ctx context.Context, channel string, message string) error {
+	err := r.client.Publish(ctx, channel, message).Err()
+	if err != nil {
+		r.logger.Error("redis publish failed",
+			zap.String("channel", channel),
+			zap.Error(err),
+		)
+		return err
+	}
+	return nil
+}
+
+// Subscribe subscribes to a Redis channel and returns a channel for receiving messages
+func (r *RedisCache) Subscribe(ctx context.Context, channel string) (<-chan string, error) {
+	pubsub := r.client.Subscribe(ctx, channel)
+
+	// Get the channel for receiving messages
+	ch := pubsub.Channel()
+
+	// Convert redis.PubSubMessage to string channel
+	stringCh := make(chan string)
+	go func() {
+		defer close(stringCh)
+		for msg := range ch {
+			select {
+			case stringCh <- msg.Payload:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	return stringCh, nil
 }

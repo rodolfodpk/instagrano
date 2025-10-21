@@ -26,6 +26,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/rodolfodpk/instagrano/internal/cache"
 	"github.com/rodolfodpk/instagrano/internal/config"
+	"github.com/rodolfodpk/instagrano/internal/events"
 	"github.com/rodolfodpk/instagrano/internal/handler"
 	"github.com/rodolfodpk/instagrano/internal/logger"
 	"github.com/rodolfodpk/instagrano/internal/middleware"
@@ -108,16 +109,20 @@ func main() {
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret)
 	postService := service.NewPostService(postRepo, mediaStorage, redisCache, cfg.CacheTTL)
 	feedService := service.NewFeedService(postRepo, redisCache, cfg.CacheTTL)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo, redisCache)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, redisCache)
 	viewService := service.NewPostViewService(viewRepo)
+
+	// Initialize event publisher
+	eventPublisher := events.NewPublisher(redisCache, appLogger.Logger)
 
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(authService)
-	postHandler := handler.NewPostHandler(postService)
+	postHandler := handler.NewPostHandler(postService, eventPublisher, appLogger.Logger)
 	feedHandler := handler.NewFeedHandler(feedService, cfg)
-	interactionHandler := handler.NewInteractionHandler(interactionService)
+	interactionHandler := handler.NewInteractionHandler(interactionService, eventPublisher, appLogger.Logger)
 	viewHandler := handler.NewPostViewHandler(viewService)
 	testImageHandler := handler.NewTestImageHandler()
+	sseHandler := handler.NewSSEHandler(redisCache, appLogger.Logger, cfg.JWTSecret)
 
 	app := fiber.New()
 
@@ -183,6 +188,7 @@ func main() {
 	protected.Post("/posts/:id/view/start", viewHandler.StartView)
 	protected.Post("/posts/:id/view/end", viewHandler.EndView)
 	protected.Get("/feed", feedHandler.GetFeed)
+	protected.Get("/events/stream", sseHandler.Stream)
 
 	appLogger.Info("server starting",
 		zap.String("port", cfg.Port),

@@ -5,15 +5,23 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/rodolfodpk/instagrano/internal/domain"
+	"github.com/rodolfodpk/instagrano/internal/events"
 	"github.com/rodolfodpk/instagrano/internal/service"
+	"go.uber.org/zap"
 )
 
 type PostHandler struct {
-	postService *service.PostService
+	postService    *service.PostService
+	eventPublisher *events.Publisher
+	logger         *zap.Logger
 }
 
-func NewPostHandler(postService *service.PostService) *PostHandler {
-	return &PostHandler{postService: postService}
+func NewPostHandler(postService *service.PostService, eventPublisher *events.Publisher, logger *zap.Logger) *PostHandler {
+	return &PostHandler{
+		postService:    postService,
+		eventPublisher: eventPublisher,
+		logger:         logger,
+	}
 }
 
 // CreatePost godoc
@@ -54,6 +62,15 @@ func (h *PostHandler) CreatePost(c *fiber.Ctx) error {
 		if err != nil {
 			return c.Status(400).JSON(fiber.Map{"error": err.Error()})
 		}
+
+		// Publish new post event
+		if err := h.eventPublisher.PublishNewPost(c.Context(), post.ID, userID, post); err != nil {
+			h.logger.Error("failed to publish new post event",
+				zap.Error(err),
+				zap.Uint("post_id", post.ID),
+				zap.Uint("user_id", userID))
+		}
+
 		return c.Status(201).JSON(post)
 	}
 
@@ -80,6 +97,14 @@ func (h *PostHandler) CreatePost(c *fiber.Ctx) error {
 	post, err := h.postService.CreatePost(userID, title, caption, mediaType, fileReader, file.Filename)
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// Publish new post event
+	if err := h.eventPublisher.PublishNewPost(c.Context(), post.ID, userID, post); err != nil {
+		h.logger.Error("failed to publish new post event",
+			zap.Error(err),
+			zap.Uint("post_id", post.ID),
+			zap.Uint("user_id", userID))
 	}
 
 	return c.Status(201).JSON(post)

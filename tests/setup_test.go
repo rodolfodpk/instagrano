@@ -1,9 +1,13 @@
 package tests
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"mime/multipart"
 	"net/http/httptest"
 	"os"
 	"strings"
@@ -20,6 +24,7 @@ import (
 	"github.com/rodolfodpk/instagrano/internal/cache"
 	"github.com/rodolfodpk/instagrano/internal/config"
 	"github.com/rodolfodpk/instagrano/internal/domain"
+	"github.com/rodolfodpk/instagrano/internal/events"
 	"github.com/rodolfodpk/instagrano/internal/handler"
 	"github.com/rodolfodpk/instagrano/internal/middleware"
 	postgresRepo "github.com/rodolfodpk/instagrano/internal/repository/postgres"
@@ -259,17 +264,22 @@ func setupTestApp(t *testing.T) (*fiber.App, *TestContainers, func()) {
 	// Initialize services
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret)
 	feedService := service.NewFeedService(postRepo, sharedContainers.Cache, cfg.CacheTTL)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo, sharedContainers.Cache)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, sharedContainers.Cache)
 
 	// Create mock S3 storage for testing
 	mockStorage := NewMockMediaStorage()
 	postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, cfg.CacheTTL)
 
+	// Initialize event publisher
+	logger, _ := zap.NewProduction()
+	eventPublisher := events.NewPublisher(sharedContainers.Cache, logger)
+
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(authService)
 	feedHandler := handler.NewFeedHandler(feedService, cfg)
-	postHandler := handler.NewPostHandler(postService)
-	interactionHandler := handler.NewInteractionHandler(interactionService)
+	postHandler := handler.NewPostHandler(postService, eventPublisher, logger)
+	interactionHandler := handler.NewInteractionHandler(interactionService, eventPublisher, logger)
+	sseHandler := handler.NewSSEHandler(sharedContainers.Cache, logger, cfg.JWTSecret)
 
 	// Create Fiber app
 	app := fiber.New(fiber.Config{
@@ -289,6 +299,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *TestContainers, func()) {
 	protected.Get("/posts/:id", postHandler.GetPost)
 	protected.Post("/posts/:id/like", interactionHandler.LikePost)
 	protected.Post("/posts/:id/comment", interactionHandler.CommentPost)
+	protected.Get("/events/stream", sseHandler.Stream)
 
 	return app, sharedContainers, cleanup
 }
@@ -397,6 +408,153 @@ func registerAndLogin(t *testing.T, app *fiber.App, username, email, password st
 	Expect(loginResult).To(HaveKey("token"))
 
 	return loginResult["token"].(string)
+}
+
+// SSE Helper Functions
+
+// SSEEvent represents a parsed SSE event
+type SSEEvent struct {
+	Type string          `json:"type"`
+	Data json.RawMessage `json:"data"`
+}
+
+// connectSSE creates an SSE connection and returns a channel for receiving events
+func connectSSE(t *testing.T, app *fiber.App, token string) (<-chan SSEEvent, func()) {
+	RegisterTestingT(t)
+	
+	eventCh := make(chan SSEEvent, 10)
+	done := make(chan bool)
+	
+	// Create SSE request
+	req := httptest.NewRequest("GET", "/api/events/stream?token="+token, nil)
+	
+	// Start SSE connection in goroutine
+	go func() {
+		defer close(eventCh)
+		
+		resp, err := app.Test(req, -1) // -1 means no timeout
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.StatusCode).To(Equal(200))
+		
+		scanner := bufio.NewScanner(resp.Body)
+		for scanner.Scan() {
+			select {
+			case <-done:
+				return
+			default:
+				line := scanner.Text()
+				if strings.HasPrefix(line, "event: ") {
+					eventType := strings.TrimPrefix(line, "event: ")
+					if scanner.Scan() {
+						dataLine := scanner.Text()
+						if strings.HasPrefix(dataLine, "data: ") {
+							data := strings.TrimPrefix(dataLine, "data: ")
+							
+							var eventData json.RawMessage
+							if err := json.Unmarshal([]byte(data), &eventData); err == nil {
+								eventCh <- SSEEvent{
+									Type: eventType,
+									Data: eventData,
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}()
+	
+	// Return cleanup function
+	cleanup := func() {
+		close(done)
+	}
+	
+	return eventCh, cleanup
+}
+
+// waitForSSEEvent waits for a specific event type with timeout
+func waitForSSEEvent(t *testing.T, eventCh <-chan SSEEvent, eventType string, timeout time.Duration) SSEEvent {
+	RegisterTestingT(t)
+	
+	select {
+	case event := <-eventCh:
+		Expect(event.Type).To(Equal(eventType))
+		return event
+	case <-time.After(timeout):
+		t.Fatalf("timeout waiting for SSE event type: %s", eventType)
+		return SSEEvent{}
+	}
+}
+
+// parseSSEEventData parses SSE event data into the expected Event struct
+func parseSSEEventData(t *testing.T, data json.RawMessage) events.Event {
+	RegisterTestingT(t)
+	
+	var event events.Event
+	err := json.Unmarshal(data, &event)
+	Expect(err).NotTo(HaveOccurred())
+	return event
+}
+
+// createTestPostWithSSE creates a post and returns the post data for SSE testing
+func createTestPostWithSSE(t *testing.T, app *fiber.App, token, title, caption string) map[string]interface{} {
+	RegisterTestingT(t)
+	
+	// Create multipart form data
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	
+	writer.WriteField("title", title)
+	writer.WriteField("caption", caption)
+	writer.WriteField("media_url", "https://via.placeholder.com/300x200/FF0000/FFFFFF?text=Test")
+	
+	writer.Close()
+	
+	req := httptest.NewRequest("POST", "/api/posts", &buf)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer "+token)
+	
+	resp, err := app.Test(req)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(resp.StatusCode).To(Equal(201))
+	
+	var postData map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&postData)
+	return postData
+}
+
+// likeTestPostWithSSE likes a post and returns the response for SSE testing
+func likeTestPostWithSSE(t *testing.T, app *fiber.App, token string, postID uint) map[string]interface{} {
+	RegisterTestingT(t)
+	
+	req := httptest.NewRequest("POST", fmt.Sprintf("/api/posts/%d/like", postID), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	
+	resp, err := app.Test(req)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(resp.StatusCode).To(Equal(200))
+	
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result
+}
+
+// commentTestPostWithSSE comments on a post and returns the response for SSE testing
+func commentTestPostWithSSE(t *testing.T, app *fiber.App, token string, postID uint, text string) map[string]interface{} {
+	RegisterTestingT(t)
+	
+	commentData := map[string]string{"text": text}
+	req := httptest.NewRequest("POST", fmt.Sprintf("/api/posts/%d/comment", postID), strings.NewReader(marshalJSON(commentData)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	
+	resp, err := app.Test(req)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(resp.StatusCode).To(Equal(200))
+	
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result
 }
 
 // marshalJSON is a helper to marshal data to JSON

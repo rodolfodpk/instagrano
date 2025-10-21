@@ -4,15 +4,23 @@ import (
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/rodolfodpk/instagrano/internal/events"
 	"github.com/rodolfodpk/instagrano/internal/service"
+	"go.uber.org/zap"
 )
 
 type InteractionHandler struct {
 	interactionService *service.InteractionService
+	eventPublisher     *events.Publisher
+	logger             *zap.Logger
 }
 
-func NewInteractionHandler(interactionService *service.InteractionService) *InteractionHandler {
-	return &InteractionHandler{interactionService: interactionService}
+func NewInteractionHandler(interactionService *service.InteractionService, eventPublisher *events.Publisher, logger *zap.Logger) *InteractionHandler {
+	return &InteractionHandler{
+		interactionService: interactionService,
+		eventPublisher:     eventPublisher,
+		logger:             logger,
+	}
 }
 
 // LikePost godoc
@@ -32,9 +40,17 @@ func (h *InteractionHandler) LikePost(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "invalid post id"})
 	}
 
-	err = h.interactionService.LikePost(userID, uint(postID))
+	likesCount, commentsCount, err := h.interactionService.LikePost(userID, uint(postID))
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// Publish post liked event
+	if err := h.eventPublisher.PublishPostLiked(c.Context(), uint(postID), userID, likesCount, commentsCount); err != nil {
+		h.logger.Error("failed to publish post liked event",
+			zap.Error(err),
+			zap.Uint("post_id", uint(postID)),
+			zap.Uint("user_id", userID))
 	}
 
 	return c.JSON(fiber.Map{"message": "post liked"})
@@ -67,9 +83,17 @@ func (h *InteractionHandler) CommentPost(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "invalid request"})
 	}
 
-	err = h.interactionService.CommentPost(userID, uint(postID), req.Text)
+	likesCount, commentsCount, err := h.interactionService.CommentPost(userID, uint(postID), req.Text)
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// Publish post commented event
+	if err := h.eventPublisher.PublishPostCommented(c.Context(), uint(postID), userID, likesCount, commentsCount); err != nil {
+		h.logger.Error("failed to publish post commented event",
+			zap.Error(err),
+			zap.Uint("post_id", uint(postID)),
+			zap.Uint("user_id", userID))
 	}
 
 	return c.JSON(fiber.Map{"message": "comment added"})

@@ -106,6 +106,7 @@
             },
             activeViews: {}, // Track active view sessions (postId -> started_at timestamp)
             observer: null,
+            eventSource: null, // SSE connection
             
             async init() {
                 const token = localStorage.getItem('token');
@@ -115,10 +116,12 @@
                 }
                 await this.loadFeed();
                 this.setupViewTracking();
+                this.connectSSE();
                 
                 // End all active views when page unloads
                 window.addEventListener('beforeunload', () => {
                     this.endAllActiveViews();
+                    this.disconnectSSE();
                 });
             },
             
@@ -400,8 +403,86 @@
                 await Promise.allSettled(promises);
             },
             
+            connectSSE() {
+                const token = localStorage.getItem('token');
+                if (!token) return;
+
+                const url = `http://localhost:8080/api/events/stream?token=${encodeURIComponent(token)}`;
+                this.eventSource = new EventSource(url);
+
+                this.eventSource.onopen = () => {
+                    console.log('SSE connection opened');
+                };
+
+                this.eventSource.onmessage = (event) => {
+                    console.log('SSE message received:', event);
+                };
+
+                this.eventSource.addEventListener('connected', (event) => {
+                    console.log('SSE connected:', event.data);
+                });
+
+                this.eventSource.addEventListener('new_post', (event) => {
+                    const data = JSON.parse(event.data);
+                    console.log('New post event:', data);
+                    
+                    // Add new post to the beginning of the feed
+                    if (data.post) {
+                        this.posts.unshift(data.post);
+                    }
+                });
+
+                this.eventSource.addEventListener('post_liked', (event) => {
+                    const data = JSON.parse(event.data);
+                    console.log('Post liked event:', data);
+                    
+                    // Update like count for the specific post
+                    const postIndex = this.posts.findIndex(post => post.id === data.post_id);
+                    if (postIndex !== -1) {
+                        this.posts[postIndex].likes_count = data.data.likes_count;
+                        this.posts[postIndex].comments_count = data.data.comments_count;
+                    }
+                });
+
+                this.eventSource.addEventListener('post_commented', (event) => {
+                    const data = JSON.parse(event.data);
+                    console.log('Post commented event:', data);
+                    
+                    // Update comment count for the specific post
+                    const postIndex = this.posts.findIndex(post => post.id === data.post_id);
+                    if (postIndex !== -1) {
+                        this.posts[postIndex].likes_count = data.data.likes_count;
+                        this.posts[postIndex].comments_count = data.data.comments_count;
+                    }
+                });
+
+                this.eventSource.addEventListener('heartbeat', (event) => {
+                    console.log('SSE heartbeat:', event.data);
+                });
+
+                this.eventSource.onerror = (error) => {
+                    console.error('SSE error:', error);
+                    // Attempt to reconnect after 5 seconds
+                    setTimeout(() => {
+                        if (this.eventSource && this.eventSource.readyState === EventSource.CLOSED) {
+                            console.log('Attempting to reconnect SSE...');
+                            this.connectSSE();
+                        }
+                    }, 5000);
+                };
+            },
+
+            disconnectSSE() {
+                if (this.eventSource) {
+                    this.eventSource.close();
+                    this.eventSource = null;
+                    console.log('SSE connection closed');
+                }
+            },
+
             logout() {
                 this.endAllActiveViews();
+                this.disconnectSSE();
                 localStorage.removeItem('token');
                 window.location.href = '/';
             }
