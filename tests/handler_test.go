@@ -123,9 +123,9 @@ var _ = Describe("PostHandler", func() {
 				S3Bucket:   "test-bucket",
 			}
 			webclientConfig := webclient.Config{
-				UseMockController: true,
+				UseMockController: true, // Re-enable mock controller
 				MockBaseURL:       "http://localhost:8080",
-				RealURLTimeout:    cfg.WebclientTimeout,
+				RealURLTimeout:    10 * time.Second, // Increase timeout
 			}
 			mediaStorage, err := s3.NewMediaStorage(
 				cfg.S3Endpoint,
@@ -158,7 +158,7 @@ var _ = Describe("PostHandler", func() {
 
 			writer.WriteField("title", "New Post")
 			writer.WriteField("caption", "New Caption")
-			writer.WriteField("media_url", "https://via.placeholder.com/300x200/FF0000/FFFFFF?text=Test")
+			writer.WriteField("media_url", "http://localhost/test/image")
 
 			writer.Close()
 

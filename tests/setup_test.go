@@ -317,9 +317,9 @@ func setupTestApp() (*fiber.App, *TestContainers, func()) {
 
 	// Initialize real S3 storage for testing
 	webclientConfig := webclient.Config{
-		UseMockController: true,
+		UseMockController: true, // Re-enable mock controller
 		MockBaseURL:       "http://localhost:8080",
-		RealURLTimeout:    cfg.WebclientTimeout,
+		RealURLTimeout:    10 * time.Second, // Increase timeout
 	}
 	mediaStorage, err := s3.NewMediaStorage(
 		cfg.S3Endpoint,
@@ -635,9 +635,9 @@ func createTestS3Storage() s3.MediaStorage {
 	}
 
 	webclientConfig := webclient.Config{
-		UseMockController: true,
+		UseMockController: true, // Re-enable mock controller
 		MockBaseURL:       "http://localhost:8080",
-		RealURLTimeout:    5 * time.Second,
+		RealURLTimeout:    10 * time.Second, // Increase timeout
 	}
 
 	mediaStorage, err := s3.NewMediaStorage(

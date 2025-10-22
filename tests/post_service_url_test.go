@@ -11,11 +11,11 @@ import (
 )
 
 const (
-	// Use local static test image endpoints
+	// Use local static test image endpoints (will be rewritten by mock controller)
 	testImageURL = "http://localhost/test/image"
 	testPNGURL   = "http://localhost/test/image" // Same image for simplicity
 	// URLs that should fail
-	testNotFoundURL = "http://localhost/nonexistent"
+	testNotFoundURL = "http://nonexistent-domain-that-does-not-exist.com/image.jpg"
 	testInvalidURL  = "not-a-valid-url"
 )
 

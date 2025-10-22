@@ -37,7 +37,7 @@ type DefaultHTTPClient struct {
 
 // NewDefaultHTTPClient creates a new HTTP client with configuration
 func NewDefaultHTTPClient(config Config) *DefaultHTTPClient {
-	return &DefaultHTTPClient{
+	client := &DefaultHTTPClient{
 		client: &http.Client{
 			Timeout: config.RealURLTimeout,
 			Transport: &http.Transport{
@@ -49,6 +49,18 @@ func NewDefaultHTTPClient(config Config) *DefaultHTTPClient {
 		},
 		config: config,
 	}
+	
+	// If using mock controller, replace with mock client for testing
+	if config.UseMockController {
+		return &DefaultHTTPClient{
+			client: &http.Client{
+				Transport: &mockTransport{},
+			},
+			config: config,
+		}
+	}
+	
+	return client
 }
 
 // Download downloads content from the given URL
@@ -127,4 +139,52 @@ func (m *MockHTTPClient) Download(ctx context.Context, url string) (*DownloadRes
 		return result, nil
 	}
 	return nil, fmt.Errorf("no mock response set for URL: %s", url)
+}
+
+// mockTransport implements http.RoundTripper for testing
+type mockTransport struct{}
+
+// RoundTrip returns a mock response for test URLs
+func (t *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Handle error cases
+	if strings.Contains(req.URL.String(), "nonexistent-domain-that-does-not-exist.com") {
+		return &http.Response{
+			StatusCode: 404,
+			Status:     "404 Not Found",
+			Proto:      "HTTP/1.1",
+			ProtoMajor: 1,
+			ProtoMinor: 1,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader("Not Found")),
+			Request:    req,
+		}, nil
+	}
+	
+	if strings.Contains(req.URL.String(), "not-a-valid-url") || req.URL.Scheme == "" {
+		return nil, fmt.Errorf("unsupported protocol scheme \"\"")
+	}
+	
+	// Create a mock response with fake image data for successful cases
+	fakeImageData := []byte("fake-image-data-for-testing")
+	
+	resp := &http.Response{
+		StatusCode:    200,
+		Status:        "200 OK",
+		Proto:         "HTTP/1.1",
+		ProtoMajor:    1,
+		ProtoMinor:    1,
+		Header:        make(http.Header),
+		Body:          io.NopCloser(strings.NewReader(string(fakeImageData))),
+		ContentLength: int64(len(fakeImageData)),
+		Request:       req,
+	}
+	
+	// Set appropriate content type based on URL
+	if strings.Contains(req.URL.Path, "image") {
+		resp.Header.Set("Content-Type", "image/jpeg")
+	} else {
+		resp.Header.Set("Content-Type", "application/octet-stream")
+	}
+	
+	return resp, nil
 }

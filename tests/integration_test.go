@@ -130,7 +130,7 @@ var _ = Describe("Integration Tests", func() {
 			// Add form fields
 			writer.WriteField("title", "Test Post")
 			writer.WriteField("caption", "This is a test post")
-			writer.WriteField("media_url", "http://localhost/test/image")
+			writer.WriteField("media_url", "https://via.placeholder.com/300x200/FF0000/FFFFFF?text=Test")
 
 			err := writer.Close()
 			Expect(err).NotTo(HaveOccurred())
@@ -168,7 +168,7 @@ var _ = Describe("Integration Tests", func() {
 
 			writer.WriteField("title", "Post to Like")
 			writer.WriteField("caption", "This post will be liked")
-			writer.WriteField("media_url", "http://localhost/test/image")
+			writer.WriteField("media_url", "https://via.placeholder.com/300x200/FF0000/FFFFFF?text=Test")
 
 			err := writer.Close()
 			Expect(err).NotTo(HaveOccurred())
@@ -215,7 +215,7 @@ var _ = Describe("Integration Tests", func() {
 
 			writer.WriteField("title", "Post to Comment")
 			writer.WriteField("caption", "This post will be commented on")
-			writer.WriteField("media_url", "http://localhost/test/image")
+			writer.WriteField("media_url", "https://via.placeholder.com/300x200/FF0000/FFFFFF?text=Test")
 
 			err := writer.Close()
 			Expect(err).NotTo(HaveOccurred())
