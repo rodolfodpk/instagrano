@@ -1,137 +1,191 @@
 # Integration Tests for Instagrano
 
-This directory contains comprehensive integration tests for the Instagrano application, specifically testing the JWT authentication and file upload functionality that was recently fixed.
+This directory contains comprehensive integration tests for the Instagrano application using Testcontainers for authentic testing with real PostgreSQL, Redis, and LocalStack S3 containers.
 
 ## Overview
 
 The integration tests verify:
-- ✅ User registration and login
-- ✅ JWT token generation and validation
-- ✅ File upload functionality
-- ✅ Feed access with authentication
-- ✅ JWT token validation edge cases
+- ✅ User registration and login with JWT authentication
+- ✅ File upload functionality (both local files and URL-based)
+- ✅ Feed access with Redis caching
+- ✅ Post interactions (likes, comments, views)
+- ✅ WebSocket real-time events
+- ✅ S3 storage operations via LocalStack
+
+## Test Architecture
+
+### Testcontainers Integration
+- **PostgreSQL Container**: Real database with automatic schema migrations
+- **Redis Container**: Real cache for testing caching behavior
+- **LocalStack Container**: S3-compatible storage for media uploads
+- **Dynamic Ports**: All containers use dynamic port allocation
+- **Automatic Cleanup**: Containers are automatically terminated after tests
+
+### Mock Transport for Webclient
+- **Custom HTTP Transport**: Intercepts test URLs (`http://localhost/test/image`)
+- **No External Calls**: Returns predefined responses without real HTTP requests
+- **Test Isolation**: Enables URL-based upload tests without external dependencies
 
 ## Running the Tests
 
 ### Prerequisites
+- Docker and Docker Compose running
+- Go 1.23+
 
-1. **Start the server** with the correct JWT secret:
-   ```bash
-   JWT_SECRET='super-secret-key-for-testing' PORT=3007 go run cmd/api/main.go
-   ```
-
-2. **Ensure PostgreSQL is running** (via Docker Compose):
-   ```bash
-   docker-compose up -d
-   ```
-
-### Running Tests
-
-#### Option 1: Using the test runner script
+### Quick Test Run
 ```bash
-./run_integration_tests.sh
+# Run all tests (uses Testcontainers - no manual setup needed)
+make test-full
 ```
 
-#### Option 2: Using go test directly
+### Detailed Testing
 ```bash
-go test -v ./tests/
-```
+# Run tests with verbose output
+go test -race -v ./tests/...
 
-#### Option 3: Running specific test cases
-```bash
-go test -v ./tests/ -run "TestJWTIntegration/User_Registration_and_Login"
-go test -v ./tests/ -run "TestJWTIntegration/File_Upload_and_Post_Creation"
-go test -v ./tests/ -run "TestJWTIntegration/Feed_Access"
-go test -v ./tests/ -run "TestJWTIntegration/JWT_Token_Validation_Edge_Cases"
+# Run specific test suites
+go test ./tests/ -run "TestAuth" -v
+go test ./tests/ -run "TestFeed" -v
+go test ./tests/ -run "TestPost" -v
+go test ./tests/ -run "TestIntegration" -v
+
+# Run with coverage
+go test -cover ./tests/...
+
+# Generate HTML coverage report
+go test -coverprofile=coverage.out ./tests/ -coverpkg=./...
+go tool cover -html=coverage.out
 ```
 
 ## Test Structure
 
-### Test Cases
+```
+tests/
+├── main_test.go              # Ginkgo suite entry point
+├── setup_test.go            # Testcontainers setup and configuration
+├── auth_service_test.go     # Authentication service tests
+├── feed_service_test.go     # Feed and caching service tests
+├── post_service_test.go     # Post creation service tests
+├── post_service_url_test.go # URL-based upload service tests
+├── integration_test.go      # Complete API endpoint tests
+├── cache_test.go           # Redis cache behavior tests
+├── handler_test.go         # HTTP handler tests
+├── logger_test.go          # Logging configuration tests
+├── middleware_test.go      # JWT middleware tests
+├── pagination_test.go      # Cursor pagination tests
+├── domain_test.go          # Domain model tests
+├── config_test.go          # Configuration tests
+└── post_view_test.go       # Post view tracking tests
+```
 
-1. **User Registration and Login**
-   - Tests user registration with unique emails
-   - Verifies login functionality
-   - Tests JWT token generation
-   - Validates `/me` endpoint authentication
+## Test Categories
 
-2. **File Upload and Post Creation**
-   - Tests multipart form data handling
-   - Verifies file upload to local storage
-   - Tests post creation with media
-   - Validates response format
+### 1. Authentication Tests
+- User registration with unique emails
+- Login functionality and JWT token generation
+- JWT token validation and middleware
+- Authentication edge cases and error handling
 
-3. **Feed Access**
-   - Tests authenticated feed access
-   - Verifies feed response structure
-   - Tests pagination parameters
+### 2. Post Creation Tests
+- **File Upload**: Multipart form data handling
+- **URL-based Upload**: Media download and S3 storage
+- Post creation with media validation
+- S3 integration via LocalStack
 
-4. **JWT Token Validation Edge Cases**
-   - Tests invalid token handling
-   - Tests malformed Authorization headers
-   - Tests missing Authorization headers
+### 3. Feed and Caching Tests
+- Feed generation with scoring algorithm
+- Redis cache hit/miss behavior
+- Cache invalidation on interactions
+- Pagination with cursor-based navigation
 
-### Test Data
+### 4. Interaction Tests
+- Like/unlike functionality with toggle behavior
+- Comment creation and retrieval
+- Post view time tracking
+- Real-time WebSocket events
 
-- **Unique Test Users**: Each test run generates unique email addresses using timestamps
-- **Test Files**: Creates temporary text files for upload testing
-- **Error Handling**: Tests both success and failure scenarios
+### 5. Integration Tests
+- Complete API endpoint testing
+- End-to-end user workflows
+- Error handling and edge cases
+- Performance characteristics
 
 ## Key Features Tested
 
-### JWT Authentication Bug Fix
-The tests specifically verify the fix for the JWT authentication bug where:
-- Authorization headers are properly parsed
-- JWT tokens are correctly validated
-- The `strings.Split()` approach works correctly for token extraction
-
-### File Upload Functionality
+### WebSocket Real-time Events
 Tests verify:
-- Multipart form data parsing
-- File storage in `web/public/uploads/`
-- Media URL generation
-- Post creation with uploaded files
+- WebSocket connection establishment with JWT authentication
+- Real-time event broadcasting (likes, comments)
+- Client-side event handling and UI updates
+- Connection resilience and reconnection
 
-## Dependencies
+### S3 Storage Integration
+Tests verify:
+- LocalStack S3 container setup
+- Media upload to S3 buckets
+- URL generation and retrieval
+- File type validation and processing
 
-- `github.com/stretchr/testify` - For assertions and test utilities
-- Standard Go testing package
-- HTTP client for API testing
+### Redis Caching Strategy
+Tests verify:
+- Feed cache performance improvements
+- Cache invalidation on data changes
+- Cache hit/miss behavior
+- TTL configuration and expiration
 
-## Test Output
+## Test Data Management
 
-Successful test run output:
-```
-=== RUN   TestJWTIntegration
-=== RUN   TestJWTIntegration/User_Registration_and_Login
-=== RUN   TestJWTIntegration/File_Upload_and_Post_Creation
-=== RUN   TestJWTIntegration/Feed_Access
-=== RUN   TestJWTIntegration/JWT_Token_Validation_Edge_Cases
---- PASS: TestJWTIntegration (0.31s)
-    --- PASS: TestJWTIntegration/User_Registration_and_Login (0.15s)
-    --- PASS: TestJWTIntegration/File_Upload_and_Post_Creation (0.07s)
-    --- PASS: TestJWTIntegration/Feed_Access (0.07s)
-    --- PASS: TestJWTIntegration/JWT_Token_Validation_Edge_Cases (0.01s)
-PASS
-```
+Tests use Testcontainers to create isolated environments:
+- **Fresh Database**: Each test run gets a clean PostgreSQL instance
+- **Fresh Cache**: Each test run gets a clean Redis instance
+- **Fresh Storage**: Each test run gets a clean LocalStack S3 bucket
+- **Automatic Cleanup**: All containers are terminated after tests complete
+- **No Shared State**: Complete isolation between test runs
+
+## Performance Testing
+
+See [Performance Results](../docs/PERFORMANCE.md) for K6 load testing details and comprehensive metrics.
 
 ## Troubleshooting
 
-### Server Not Running
-If you see "Server is not running", ensure:
-1. The server is started with the correct JWT secret
-2. The server is running on port 3007
-3. PostgreSQL is running via Docker Compose
-
 ### Test Failures
-- Check server logs for errors
-- Verify database connectivity
-- Ensure JWT secret matches between server and tests
+- **Container Issues**: Ensure Docker is running and has sufficient resources
+- **Port Conflicts**: Testcontainers use dynamic ports, conflicts are rare
+- **Timeout Issues**: Increase test timeouts if containers are slow to start
+
+### LocalStack Issues
+- **S3 Bucket Creation**: Buckets are created automatically during tests
+- **Endpoint Configuration**: Dynamic endpoints are configured automatically
+- **Region Settings**: Tests use `us-east-1` region for LocalStack
+
+### Database Issues
+- **Migration Failures**: Schema migrations run automatically via golang-migrate
+- **Connection Issues**: Database connections are managed by Testcontainers
+- **Data Isolation**: Each test gets a fresh database instance
+
+## Continuous Integration
+
+The test suite is designed for CI/CD environments:
+- **GitHub Actions**: Full Testcontainers support with Docker-in-Docker
+- **Race Detection**: Concurrent testing for thread safety validation
+- **Coverage Reporting**: Comprehensive test coverage metrics
+- **No External Dependencies**: All services run in containers
 
 ## Contributing
 
 When adding new tests:
-1. Follow the existing test structure
-2. Use unique test data to avoid conflicts
+1. Follow the existing test structure and naming conventions
+2. Use Testcontainers for all external dependencies
 3. Test both success and failure scenarios
-4. Update this README if adding new test categories
+4. Include performance characteristics where relevant
+5. Update this README if adding new test categories
+
+## Dependencies
+
+- `github.com/onsi/ginkgo/v2` - BDD testing framework
+- `github.com/onsi/gomega` - Matcher library for assertions
+- `github.com/testcontainers/testcontainers-go` - Container orchestration
+- `github.com/testcontainers/testcontainers-go/modules/postgres` - PostgreSQL container
+- `github.com/testcontainers/testcontainers-go/modules/redis` - Redis container
+- `github.com/testcontainers/testcontainers-go/modules/localstack` - LocalStack container
+- `github.com/golang-migrate/migrate/v4` - Database migrations

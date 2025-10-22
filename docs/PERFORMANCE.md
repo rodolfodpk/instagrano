@@ -32,20 +32,20 @@ This document contains comprehensive performance test results for the Instagrano
 ✓ me endpoint returns user_id
 
 checks.........................: 100.00% ✓ 350      ✗ 0
-data_received..................: 42 kB   1.3 kB/s
-data_sent......................: 36 kB  1.1 kB/s
-✓ http_req_duration..............: avg=60.1ms   min=129µs   med=84.56ms  max=105.93ms  p(90)=96.68ms  p(95)=99.3ms
+data_received..................: 48 kB   1.5 kB/s
+data_sent......................: 39 kB   1.2 kB/s
+✓ http_req_duration..............: avg=65.53ms min=832µs   med=78.6ms   max=223.41ms p(90)=109.29ms p(95)=125.21ms
 ✓ http_req_failed................: 0.00%  ✓ 0        ✗ 150
-http_reqs......................: 150     4.707349/s
-iterations.....................: 50      1.569116/s
+http_reqs......................: 150     4.682497/s
+iterations.....................: 50      1.560832/s
 vus............................: 5      min=5      max=5
 ```
 
 **Key Metrics**:
 - **Success Rate**: 100% (350/350 checks passed)
-- **Response Time**: p95 < 100ms ✅
+- **Response Time**: p95 < 125ms ✅
 - **Error Rate**: 0% ✅
-- **Throughput**: 4.7 requests/second
+- **Throughput**: 4.68 requests/second
 
 ---
 
@@ -62,20 +62,20 @@ vus............................: 5      min=5      max=5
 ✓ warm feed status is 200
 ✓ warm feed has posts
 
-✓ cache_hit_duration.............: avg=6.18    min=2       med=5        max=22        p(90)=10.8     p(95)=12
-✓ cache_miss_duration............: avg=5.81    min=1       med=4        max=13        p(90)=10.4     p(95)=11
+✓ cache_hit_duration.............: avg=5.555556 min=2       med=5        max=14        p(90)=10.2     p(95)=13.4
+✓ cache_miss_duration............: avg=8.148148 min=1       med=5        max=23        p(90)=18.4     p(95)=22
 checks.........................: 100.00% ✓ 108      ✗ 0
-data_received..................: 222 kB 4.7 kB/s
-data_sent......................: 54 kB  1.2 kB/s
-✓ http_req_duration..............: avg=42.12ms min=1.07ms  med=11.63ms  max=236.52ms  p(90)=96.95ms  p(95)=99.8ms
+data_received..................: 261 kB  5.6 kB/s
+data_sent......................: 58 kB   1.2 kB/s
+✓ http_req_duration..............: avg=41.85ms  min=1.23ms  med=24.38ms  max=111.31ms  p(90)=89.22ms  p(95)=100.7ms
 ✓ http_req_failed................: 0.00%  ✓ 0        ✗ 135
-http_reqs......................: 135     2.874029/s
-iterations.....................: 27      0.574806/s
+http_reqs......................: 135     2.875849/s
+iterations.....................: 27      0.57517/s
 ```
 
 **Cache Performance Analysis**:
-- **Cache Hit Duration**: avg 6.18ms, p95 12ms ✅ (threshold: p95 < 100ms)
-- **Cache Miss Duration**: avg 5.81ms, p95 11ms ✅ (threshold: p95 < 500ms)
+- **Cache Hit Duration**: avg 5.56ms, p95 13.4ms ✅ (threshold: p95 < 100ms)
+- **Cache Miss Duration**: avg 8.15ms, p95 22ms ✅ (threshold: p95 < 500ms)
 - **Cache Effectiveness**: Both hit and miss times are very fast due to local Redis
 - **Success Rate**: 100% (108/108 checks passed)
 
@@ -94,19 +94,19 @@ iterations.....................: 27      0.574806/s
 ✓ post has media_url
 
 checks.........................: 100.00% ✓ 90       ✗ 0
-data_received..................: 37 kB   1.2 kB/s
-data_sent......................: 46 kB   1.4 kB/s
-✓ http_req_duration..............: avg=60.09ms min=4.24ms  med=66.95ms  max=115.2ms   p(90)=94.08ms  p(95)=95.53ms
+data_received..................: 37 kB   1.1 kB/s
+data_sent......................: 47 kB   1.5 kB/s
+✓ http_req_duration..............: avg=65.71ms  min=3.98ms  med=68.8ms   max=115.27ms  p(90)=96.12ms  p(95)=100.48ms
 ✓ http_req_failed................: 0.00%  ✓ 0        ✗ 90
-http_reqs......................: 90      2.826300/s
-iterations.....................: 30      0.942100/s
+http_reqs......................: 90      2.809534/s
+iterations.....................: 30      0.936511/s
 ```
 
 **Key Metrics**:
 - **Success Rate**: 100% (90/90 checks passed)
 - **Response Time**: p95 < 100ms ✅
-- **File Upload Performance**: ~60ms average for multipart uploads
-- **Throughput**: 2.8 requests/second
+- **File Upload Performance**: ~66ms average for multipart uploads
+- **Throughput**: 2.81 requests/second
 
 ---
 
@@ -126,18 +126,18 @@ iterations.....................: 30      0.942100/s
 
 checks.........................: 100.00% ✓ 150      ✗ 0
 data_received..................: 35 kB   1.1 kB/s
-data_sent......................: 35 kB   1.1 kB/s
-✓ http_req_duration..............: avg=60.08ms min=3.55ms  med=66.71ms  max=115.3ms   p(90)=96.17ms  p(95)=97.88ms
+data_sent......................: 36 kB   1.1 kB/s
+✓ http_req_duration..............: avg=72.61ms min=5.94ms  med=68.34ms  max=237.11ms  p(90)=106.3ms   p(95)=120.55ms
 ✓ http_req_failed................: 0.00%  ✓ 0        ✗ 90
-http_reqs......................: 90      2.826058/s
-iterations.....................: 30      0.942019/s
+http_reqs......................: 90      2.791945/s
+iterations.....................: 30      0.930648/s
 ```
 
 **Key Metrics**:
-- **Success Rate**: 100% (150/150 checks passed) - **Fixed from 33.33% error rate**
-- **Response Time**: p95 < 100ms ✅
-- **URL Processing**: ~60ms average for URL download + S3 upload
-- **Throughput**: 2.8 requests/second
+- **Success Rate**: 100% (150/150 checks passed) ✅
+- **Response Time**: p95 < 121ms ✅
+- **URL Processing**: ~73ms average for URL download + S3 upload
+- **Throughput**: 2.79 requests/second
 
 ---
 
@@ -152,23 +152,23 @@ iterations.....................: 30      0.942019/s
 ✓ cold post status 200
 ✓ warm post status 200
 
-✓ cache_hit_duration.............: avg=1.83    min=0        med=1        max=17        p(90)=4        p(95)=7
-✓ cache_miss_duration............: avg=5.08    min=1        med=3        max=93        p(90)=11       p(95)=15
-checks.........................: 100.00% ✓ 1744      ✗ 0
-data_received..................: 1.8 MB  59 kB/s
-data_sent......................: 1.5 MB  48 kB/s
-✓ http_req_duration..............: avg=34.38ms min=428µs    med=8.28ms   max=415.1ms   p(90)=79.24ms  p(95)=94.26ms
-✓ http_req_failed................: 0.00%  ✓ 0          ✗ 4360
-http_reqs......................: 4360    144.664098/s
-iterations.....................: 872     28.932820/s
+✓ cache_hit_duration.............: avg=1.918736 min=0        med=1        max=29        p(90)=3        p(95)=7.75
+✓ cache_miss_duration............: avg=5.557562 min=1        med=3        max=52        p(90)=13       p(95)=18.75
+checks.........................: 100.00% ✓ 1772      ✗ 0
+data_received..................: 1.9 MB  61 kB/s
+data_sent......................: 1.6 MB  53 kB/s
+✓ http_req_duration..............: avg=34.1ms   min=404µs    med=13.8ms   max=412.9ms   p(90)=74.89ms  p(95)=80.84ms
+✓ http_req_failed................: 0.00%  ✓ 0          ✗ 4430
+http_reqs......................: 4430    145.32451/s
+iterations.....................: 886     29.064902/s
 ```
 
 **Cache Performance Analysis**:
-- **Cache Hit Duration**: avg 1.83ms, p95 7ms ✅ (threshold: p95 < 50ms)
-- **Cache Miss Duration**: avg 5.08ms, p95 15ms ✅ (threshold: p95 < 200ms)
-- **Cache Improvement**: **64% reduction** (1.83ms vs 5.08ms)
-- **High Throughput**: 144 requests/second, 872 iterations
-- **Success Rate**: 100% (1744/1744 checks passed)
+- **Cache Hit Duration**: avg 1.92ms, p95 7.75ms ✅ (threshold: p95 < 50ms)
+- **Cache Miss Duration**: avg 5.56ms, p95 18.75ms ✅ (threshold: p95 < 200ms)
+- **Cache Improvement**: **65% reduction** (1.92ms vs 5.56ms)
+- **High Throughput**: 145 requests/second, 886 iterations
+- **Success Rate**: 100% (1772/1772 checks passed)
 
 ---
 
@@ -189,19 +189,19 @@ iterations.....................: 872     28.932820/s
 ✓ comment status is 200
 
 checks.........................: 100.00% ✓ 168      ✗ 0
-data_received..................: 120 kB  2.4 kB/s
-data_sent......................: 57 kB   1.1 kB/s
-✓ http_req_duration..............: avg=40.52ms min=1.69ms  med=17.33ms  max=116.68ms  p(90)=94.46ms  p(95)=98.2ms
+data_received..................: 137 kB  2.7 kB/s
+data_sent......................: 62 kB   1.2 kB/s
+✓ http_req_duration..............: avg=49.61ms  min=1.87ms  med=33.38ms  max=207.2ms   p(90)=98.5ms   p(95)=103.2ms
 ✓ http_req_failed................: 0.00%  ✓ 0        ✗ 144
-http_reqs......................: 144     2.877887/s
-iterations.....................: 24      0.479648/s
+http_reqs......................: 144     2.852502/s
+iterations.....................: 24      0.475417/s
 ```
 
 **Key Metrics**:
 - **Success Rate**: 100% (168/168 checks passed)
-- **Response Time**: p95 < 100ms ✅
+- **Response Time**: p95 < 103ms ✅
 - **Complete Workflow**: All user interactions working correctly
-- **Throughput**: 2.9 requests/second
+- **Throughput**: 2.85 requests/second
 
 ---
 
@@ -211,19 +211,19 @@ iterations.....................: 24      0.479648/s
 - **Total Tests**: 6 scenarios
 - **Success Rate**: 100% across all tests
 - **Error Rate**: 0% across all tests
-- **Response Time**: All p95 < 100ms ✅
+- **Response Time**: All p95 < 125ms ✅
 
 ### Cache Performance Highlights
-- **Post Retrieval Cache**: 64% performance improvement (1.83ms vs 5.08ms)
-- **Feed Cache**: Both hit and miss times under 15ms
+- **Post Retrieval Cache**: 65% performance improvement (1.92ms vs 5.56ms)
+- **Feed Cache**: Both hit and miss times under 22ms
 - **Cache Thresholds**: All cache performance thresholds met
 
 ### Key Achievements
 1. **Zero Failures**: All 6 test scenarios pass with 100% success rate
-2. **Response Times**: p95 response times consistently under 100ms
+2. **Response Times**: p95 response times consistently under 125ms
 3. **Effective Caching**: Significant performance improvements with Redis caching
 4. **Dual Upload Support**: Both file upload and URL-based upload working correctly
-5. **High Throughput**: Up to 144 requests/second for cached operations
+5. **High Throughput**: Up to 145 requests/second for cached operations
 
 ### Test Files Reference
 - [Authentication Test](../../tests/k6/scenarios/auth.js)

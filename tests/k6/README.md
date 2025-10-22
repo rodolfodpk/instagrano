@@ -150,6 +150,10 @@ Ensure the API server is running:
 make start
 ```
 
+### Auth tests showing failures
+
+The auth endpoint was corrected from `/api/me` to `/api/auth/me`. Ensure you're using the latest test scripts.
+
 ### Cache tests not showing improvement
 
 Verify Redis is running:

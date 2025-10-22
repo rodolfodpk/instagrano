@@ -46,6 +46,7 @@ The frontend includes:
 - **Post Creation**: File upload with image/video support or URL-based media
 - **Interactions**: Like and comment functionality
 - **View Time Tracking**: Automatic tracking using Intersection Observer
+- **Real-time Updates**: WebSocket connection for live like/comment notifications
 
 ## Post Creation Examples
 

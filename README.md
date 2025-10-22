@@ -16,6 +16,7 @@ A mini Instagram API built with Go Fiber, PostgreSQL, Redis, LocalStack S3, Zap 
 - JWT authentication
 - Feed scoring algorithm (time decay + engagement)
 - File upload (images/videos)
+- WebSocket real-time updates
 - Frontend with Alpine.js
 - View time tracking
 
@@ -46,7 +47,8 @@ make start
 - `GET /health` - Health check
 - `POST /api/auth/register` - User registration
 - `POST /api/auth/login` - User login
-- `GET /api/me` - Get current user (requires JWT)
+- `GET /api/auth/me` - Get current user (requires JWT)
+- `GET /api/events/ws` - WebSocket connection for real-time events (requires JWT)
 - `POST /api/posts` - Create post with file upload or URL (requires JWT)
 - `GET /api/posts/:id` - Get specific post (requires JWT)
 - `POST /api/posts/:id/like` - Like a post (requires JWT)
@@ -61,7 +63,8 @@ make start
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Frontend       │    │   Go Fiber      │    │   PostgreSQL    │
 │   (Alpine.js)    │◄──►│   HTTP Server   │◄──►│   Database      │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+│   WebSocket      │◄──►│   WebSocket     │    └─────────────────┘
+└─────────────────┘    └─────────────────┘
                                 │
                        ┌────────┴────────┐
                        ▼                 ▼

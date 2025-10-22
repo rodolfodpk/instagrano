@@ -39,8 +39,51 @@ Content-Type: application/json
 
 ### Get Current User
 ```bash
-GET /api/me
+GET /api/auth/me
 Authorization: Bearer <token>
+```
+
+## Real-time Events
+
+### WebSocket Connection
+```bash
+GET /api/events/ws?token=<jwt_token>
+```
+
+**Connection**: WebSocket upgrade with JWT authentication
+
+**Event Types**:
+- `like` - When a post is liked
+- `unlike` - When a post is unliked  
+- `comment` - When a comment is added
+
+**Example JavaScript Client**:
+```javascript
+const token = localStorage.getItem('jwt_token');
+const ws = new WebSocket(`ws://localhost:8080/api/events/ws?token=${token}`);
+
+ws.onopen = () => {
+  console.log('WebSocket connected');
+};
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Received event:', data);
+  
+  switch(data.type) {
+    case 'like':
+      updateLikeCount(data.post_id, data.likes_count);
+      break;
+    case 'comment':
+      addCommentToPost(data.post_id, data.comment);
+      break;
+  }
+};
+
+ws.onclose = () => {
+  console.log('WebSocket disconnected');
+  // Implement reconnection logic
+};
 ```
 
 ## Post Endpoints
