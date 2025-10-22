@@ -55,8 +55,8 @@ var (
 
 // Ginkgo test suite setup
 var _ = BeforeSuite(func() {
-	// Create context with timeout for test setup
-	ctx, cancel = context.WithTimeout(context.Background(), 120*time.Second)
+	// Create context with timeout for test setup (increased for CI)
+	ctx, cancel = context.WithTimeout(context.Background(), 180*time.Second)
 
 	// Start PostgreSQL container
 	pgContainer, err := postgres.RunContainer(ctx,
@@ -107,10 +107,24 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Start LocalStack container
+	fmt.Println("Starting LocalStack container...")
 	localstackContainer, err := localstack.Run(ctx,
 		"localstack/localstack:3.0",
+		testcontainers.WithEnv(map[string]string{
+			"SERVICES": "s3",
+			"DEBUG":    "1",
+			"LAMBDA_EXECUTOR": "local",
+			"DATA_DIR": "/tmp/localstack/data",
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForHTTP("/_localstack/health").
+				WithPort("4566/tcp").
+				WithStartupTimeout(60*time.Second).
+				WithPollInterval(1*time.Second),
+		),
 	)
 	Expect(err).NotTo(HaveOccurred())
+	fmt.Println("LocalStack container started successfully")
 
 	// Get LocalStack S3 endpoint (host and port)
 	host, err := localstackContainer.Host(ctx)
@@ -120,6 +134,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	
 	s3Endpoint := fmt.Sprintf("http://%s:%s", host, mappedPort.Port())
+	fmt.Printf("LocalStack S3 endpoint: %s\n", s3Endpoint)
 
 	sharedContainers = &TestContainers{
 		PostgresContainer:   pgContainer,
