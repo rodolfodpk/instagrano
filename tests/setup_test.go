@@ -111,10 +111,10 @@ var _ = BeforeSuite(func() {
 	localstackContainer, err := localstack.Run(ctx,
 		"localstack/localstack:3.0",
 		testcontainers.WithEnv(map[string]string{
-			"SERVICES": "s3",
-			"DEBUG":    "1",
+			"SERVICES":        "s3",
+			"DEBUG":           "1",
 			"LAMBDA_EXECUTOR": "local",
-			"DATA_DIR": "/tmp/localstack/data",
+			"DATA_DIR":        "/tmp/localstack/data",
 		}),
 		testcontainers.WithWaitStrategy(
 			wait.ForHTTP("/_localstack/health").
@@ -129,10 +129,10 @@ var _ = BeforeSuite(func() {
 	// Get LocalStack S3 endpoint (host and port)
 	host, err := localstackContainer.Host(ctx)
 	Expect(err).NotTo(HaveOccurred())
-	
+
 	mappedPort, err := localstackContainer.MappedPort(ctx, "4566/tcp")
 	Expect(err).NotTo(HaveOccurred())
-	
+
 	s3Endpoint := fmt.Sprintf("http://%s:%s", host, mappedPort.Port())
 	fmt.Printf("LocalStack S3 endpoint: %s\n", s3Endpoint)
 

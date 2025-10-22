@@ -65,13 +65,13 @@ export default function () {
   // Test 3: Authenticated Request (/me)
   if (token) {
     const meRes = http.get(
-      `${config.apiUrl}/api/me`,
+      `${config.apiUrl}/api/auth/me`,
       { headers: authHeader(token) }
     );
     
     check(meRes, {
       'me endpoint status is 200': (r) => r.status === 200,
-      'me endpoint returns user_id': (r) => r.json('user_id') !== undefined,
+      'me endpoint returns user_id': (r) => r.json('user.id') !== undefined,
     });
   }
   

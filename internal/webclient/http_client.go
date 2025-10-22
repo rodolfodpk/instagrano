@@ -49,7 +49,7 @@ func NewDefaultHTTPClient(config Config) *DefaultHTTPClient {
 		},
 		config: config,
 	}
-	
+
 	// If using mock controller, replace with mock client for testing
 	if config.UseMockController {
 		return &DefaultHTTPClient{
@@ -59,7 +59,7 @@ func NewDefaultHTTPClient(config Config) *DefaultHTTPClient {
 			config: config,
 		}
 	}
-	
+
 	return client
 }
 
@@ -159,14 +159,14 @@ func (t *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			Request:    req,
 		}, nil
 	}
-	
+
 	if strings.Contains(req.URL.String(), "not-a-valid-url") || req.URL.Scheme == "" {
 		return nil, fmt.Errorf("unsupported protocol scheme \"\"")
 	}
-	
+
 	// Create a mock response with fake image data for successful cases
 	fakeImageData := []byte("fake-image-data-for-testing")
-	
+
 	resp := &http.Response{
 		StatusCode:    200,
 		Status:        "200 OK",
@@ -178,13 +178,13 @@ func (t *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		ContentLength: int64(len(fakeImageData)),
 		Request:       req,
 	}
-	
+
 	// Set appropriate content type based on URL
 	if strings.Contains(req.URL.Path, "image") {
 		resp.Header.Set("Content-Type", "image/jpeg")
 	} else {
 		resp.Header.Set("Content-Type", "application/octet-stream")
 	}
-	
+
 	return resp, nil
 }
