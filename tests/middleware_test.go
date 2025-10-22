@@ -144,8 +144,11 @@ var _ = Describe("AuthRequired", func() {
 			return c.JSON(fiber.Map{"message": "protected"})
 		})
 
+		// Create a test user first
+		user := createTestUser(sharedContainers.DB, "testuser", "test@example.com")
+
 		// Create a valid JWT token
-		token, err := createTestJWT(1)
+		token, err := createTestJWT(user.ID)
 		Expect(err).NotTo(HaveOccurred())
 
 		// When: Make request with valid token
@@ -228,8 +231,11 @@ var _ = Describe("AuthRequired", func() {
 			return c.JSON(fiber.Map{"user_id": userID})
 		})
 
-		// Create a valid JWT token for user ID 123
-		token, err := createTestJWT(123)
+		// Create a test user first
+		user := createTestUser(sharedContainers.DB, "testuser123", "test123@example.com")
+
+		// Create a valid JWT token for the user
+		token, err := createTestJWT(user.ID)
 		Expect(err).NotTo(HaveOccurred())
 
 		// When: Make request with valid token

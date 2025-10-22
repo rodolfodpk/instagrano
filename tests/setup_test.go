@@ -29,7 +29,9 @@ import (
 	"github.com/rodolfodpk/instagrano/internal/handler"
 	"github.com/rodolfodpk/instagrano/internal/middleware"
 	postgresRepo "github.com/rodolfodpk/instagrano/internal/repository/postgres"
+	"github.com/rodolfodpk/instagrano/internal/repository/s3"
 	"github.com/rodolfodpk/instagrano/internal/service"
+	"github.com/rodolfodpk/instagrano/internal/webclient"
 	"go.uber.org/zap"
 )
 
@@ -254,6 +256,7 @@ func setupTestApp() (*fiber.App, *TestContainers, func()) {
 		JWTSecret:  "test-secret",
 		CacheTTL:   5 * time.Minute,
 		S3Endpoint: "http://localhost:4566",
+		S3Region:   "us-east-1",
 		S3Bucket:   "test-bucket",
 	}
 
@@ -266,23 +269,42 @@ func setupTestApp() (*fiber.App, *TestContainers, func()) {
 	// Initialize services
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret)
 	feedService := service.NewFeedService(postRepo, sharedContainers.Cache, cfg.CacheTTL)
-	interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, sharedContainers.Cache)
-
-	// Create mock S3 storage for testing
-	mockStorage := NewMockMediaStorage()
-	postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, cfg.CacheTTL)
 
 	// Initialize event publisher
 	logger, _ := zap.NewProduction()
 	defer logger.Sync()
 	eventPublisher := events.NewPublisher(sharedContainers.Cache, logger)
 
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, sharedContainers.Cache, eventPublisher, logger)
+
+	// Initialize real S3 storage for testing
+	webclientConfig := webclient.Config{
+		UseMockController: true,
+		MockBaseURL:       "http://localhost:8080",
+		RealURLTimeout:    cfg.WebclientTimeout,
+	}
+	mediaStorage, err := s3.NewMediaStorage(
+		cfg.S3Endpoint,
+		cfg.S3Region,
+		cfg.S3Bucket,
+		webclientConfig,
+	)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to initialize S3 storage: %v", err))
+	}
+
+	// Create S3 bucket if it doesn't exist
+	if err := mediaStorage.CreateBucketIfNotExists(); err != nil {
+		panic(fmt.Sprintf("Failed to create S3 bucket: %v", err))
+	}
+
+	postService := service.NewPostService(postRepo, mediaStorage, sharedContainers.Cache, cfg.CacheTTL)
+
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(authService)
 	feedHandler := handler.NewFeedHandler(feedService, cfg)
 	postHandler := handler.NewPostHandler(postService, eventPublisher, logger)
 	interactionHandler := handler.NewInteractionHandler(interactionService, eventPublisher, logger)
-	sseHandler := handler.NewSSEHandler(sharedContainers.Cache, logger, cfg.JWTSecret)
 
 	// Create Fiber app
 	app := fiber.New(fiber.Config{
@@ -295,9 +317,6 @@ func setupTestApp() (*fiber.App, *TestContainers, func()) {
 	api := app.Group("/api")
 	api.Post("/auth/register", authHandler.Register)
 	api.Post("/auth/login", authHandler.Login)
-
-	// SSE endpoint handles its own authentication via query parameter
-	api.Get("/events/stream", sseHandler.Stream)
 
 	// Serve static test image
 	app.Static("/test/image", "./web/public/test-image.jpg")
@@ -559,5 +578,46 @@ func marshalJSON(data interface{}) string {
 func createTestJWT(userID uint) (string, error) {
 	userRepo := postgresRepo.NewUserRepository(sharedContainers.DB)
 	authService := service.NewAuthService(userRepo, "test-secret")
-	return authService.GenerateJWT(userID)
+
+	// Get user to get username
+	user, err := userRepo.FindByID(userID)
+	if err != nil {
+		return "", err
+	}
+
+	return authService.GenerateJWT(userID, user.Username)
+}
+
+// Helper function to create real S3 storage for testing
+func createTestS3Storage() s3.MediaStorage {
+	cfg := config.Load()
+	logger, _ := zap.NewProduction()
+	defer logger.Sync()
+
+	// Ensure S3 region is set for LocalStack
+	if cfg.S3Region == "" {
+		cfg.S3Region = "us-east-1"
+	}
+
+	webclientConfig := webclient.Config{
+		MockBaseURL:    cfg.WebclientMockBaseURL,
+		RealURLTimeout: cfg.WebclientTimeout,
+	}
+
+	mediaStorage, err := s3.NewMediaStorage(
+		cfg.S3Endpoint,
+		cfg.S3Region,
+		cfg.S3Bucket,
+		webclientConfig,
+	)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to initialize S3 storage: %v", err))
+	}
+
+	// Create S3 bucket if it doesn't exist
+	if err := mediaStorage.CreateBucketIfNotExists(); err != nil {
+		panic(fmt.Sprintf("Failed to create S3 bucket: %v", err))
+	}
+
+	return mediaStorage
 }

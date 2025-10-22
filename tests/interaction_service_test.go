@@ -4,18 +4,29 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/rodolfodpk/instagrano/internal/events"
 	postgresRepo "github.com/rodolfodpk/instagrano/internal/repository/postgres"
 	"github.com/rodolfodpk/instagrano/internal/service"
+	"go.uber.org/zap"
 )
+
+// Helper function to create interaction service with all required dependencies
+func createInteractionService() (*service.InteractionService, postgresRepo.LikeRepository, postgresRepo.CommentRepository, postgresRepo.PostRepository) {
+	likeRepo := postgresRepo.NewLikeRepository(sharedContainers.DB)
+	commentRepo := postgresRepo.NewCommentRepository(sharedContainers.DB)
+	postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
+	logger, _ := zap.NewProduction()
+	defer logger.Sync()
+	eventPublisher := events.NewPublisher(sharedContainers.Cache, logger)
+	interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, sharedContainers.Cache, eventPublisher, logger)
+	return interactionService, likeRepo, commentRepo, postRepo
+}
 
 var _ = Describe("InteractionService", func() {
 	Describe("LikePost", func() {
 		It("should like post successfully", func() {
 			// Given: Interaction service setup
-			likeRepo := postgresRepo.NewLikeRepository(sharedContainers.DB)
-			commentRepo := postgresRepo.NewCommentRepository(sharedContainers.DB)
-			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, sharedContainers.Cache)
+			interactionService, likeRepo, _, postRepo := createInteractionService()
 
 			// Given: User and post exist
 			user := createTestUser(sharedContainers.DB, "likeuser", "like@example.com")
@@ -42,10 +53,7 @@ var _ = Describe("InteractionService", func() {
 
 		It("should prevent duplicate likes", func() {
 			// Given: Interaction service setup
-			likeRepo := postgresRepo.NewLikeRepository(sharedContainers.DB)
-			commentRepo := postgresRepo.NewCommentRepository(sharedContainers.DB)
-			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, sharedContainers.Cache)
+			interactionService, likeRepo, _, postRepo := createInteractionService()
 
 			// Given: User and post exist
 			user := createTestUser(sharedContainers.DB, "duplicateuser", "duplicate@example.com")
@@ -58,27 +66,23 @@ var _ = Describe("InteractionService", func() {
 			// When: User tries to like the same post again
 			_, _, err2 := interactionService.LikePost(user.ID, post.ID)
 
-			// Then: Second like fails due to unique constraint
-			Expect(err2).To(HaveOccurred())
-			Expect(err2.Error()).To(ContainSubstring("duplicate key"))
+			// Then: Second like succeeds (it becomes an unlike due to toggle behavior)
+			Expect(err2).NotTo(HaveOccurred())
 
-			// Verify only one like exists
+			// Verify no likes exist (first like was undone)
 			likes, err := likeRepo.FindByPostID(post.ID)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(likes).To(HaveLen(1))
+			Expect(likes).To(HaveLen(0))
 
-			// Verify post like count is still 1 (not incremented twice)
+			// Verify post like count is 0 (unliked)
 			updatedPost, err := postRepo.FindByID(post.ID)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(updatedPost.LikesCount).To(Equal(1))
+			Expect(updatedPost.LikesCount).To(Equal(0))
 		})
 
 		It("should fail when liking non-existent post", func() {
 			// Given: Interaction service setup
-			likeRepo := postgresRepo.NewLikeRepository(sharedContainers.DB)
-			commentRepo := postgresRepo.NewCommentRepository(sharedContainers.DB)
-			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, sharedContainers.Cache)
+			interactionService, _, _, _ := createInteractionService()
 
 			// Given: User exists but post doesn't
 			user := createTestUser(sharedContainers.DB, "nonexistentuser", "nonexistent@example.com")
@@ -94,10 +98,7 @@ var _ = Describe("InteractionService", func() {
 
 		It("should fail when non-existent user likes post", func() {
 			// Given: Interaction service setup
-			likeRepo := postgresRepo.NewLikeRepository(sharedContainers.DB)
-			commentRepo := postgresRepo.NewCommentRepository(sharedContainers.DB)
-			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, sharedContainers.Cache)
+			interactionService, _, _, _ := createInteractionService()
 
 			// Given: Post exists but user doesn't
 			user := createTestUser(sharedContainers.DB, "postowner", "owner@example.com")
@@ -114,10 +115,7 @@ var _ = Describe("InteractionService", func() {
 
 		It("should handle multiple users liking same post", func() {
 			// Given: Interaction service setup
-			likeRepo := postgresRepo.NewLikeRepository(sharedContainers.DB)
-			commentRepo := postgresRepo.NewCommentRepository(sharedContainers.DB)
-			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, sharedContainers.Cache)
+			interactionService, likeRepo, _, postRepo := createInteractionService()
 
 			// Given: Multiple users and one post
 			user1 := createTestUser(sharedContainers.DB, "user1", "user1@example.com")
@@ -150,10 +148,7 @@ var _ = Describe("InteractionService", func() {
 	Describe("CommentPost", func() {
 		It("should comment on post successfully", func() {
 			// Given: Interaction service setup
-			likeRepo := postgresRepo.NewLikeRepository(sharedContainers.DB)
-			commentRepo := postgresRepo.NewCommentRepository(sharedContainers.DB)
-			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, sharedContainers.Cache)
+			interactionService, _, commentRepo, postRepo := createInteractionService()
 
 			// Given: User and post exist
 			user := createTestUser(sharedContainers.DB, "commentuser", "comment@example.com")
@@ -161,7 +156,7 @@ var _ = Describe("InteractionService", func() {
 			commentText := "This is a great post!"
 
 			// When: User comments on the post
-			_, _, err := interactionService.CommentPost(user.ID, post.ID, commentText)
+			_, _, err := interactionService.CommentPost(user.ID, post.ID, commentText, user.Username)
 
 			// Then: Comment is created successfully
 			Expect(err).NotTo(HaveOccurred())
@@ -182,17 +177,14 @@ var _ = Describe("InteractionService", func() {
 
 		It("should allow empty comment text", func() {
 			// Given: Interaction service setup
-			likeRepo := postgresRepo.NewLikeRepository(sharedContainers.DB)
-			commentRepo := postgresRepo.NewCommentRepository(sharedContainers.DB)
-			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, sharedContainers.Cache)
+			interactionService, _, commentRepo, postRepo := createInteractionService()
 
 			// Given: User and post exist
 			user := createTestUser(sharedContainers.DB, "emptycomment", "empty@example.com")
 			post := createTestPost(sharedContainers.DB, user.ID, "Post to Comment", "This post will be commented on")
 
 			// When: User tries to comment with empty text
-			_, _, err := interactionService.CommentPost(user.ID, post.ID, "")
+			_, _, err := interactionService.CommentPost(user.ID, post.ID, "", user.Username)
 
 			// Then: Comment creation succeeds (database allows empty text)
 			Expect(err).NotTo(HaveOccurred())
@@ -211,10 +203,7 @@ var _ = Describe("InteractionService", func() {
 
 		It("should handle long comment text", func() {
 			// Given: Interaction service setup
-			likeRepo := postgresRepo.NewLikeRepository(sharedContainers.DB)
-			commentRepo := postgresRepo.NewCommentRepository(sharedContainers.DB)
-			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, sharedContainers.Cache)
+			interactionService, _, commentRepo, _ := createInteractionService()
 
 			// Given: User and post exist
 			user := createTestUser(sharedContainers.DB, "longcomment", "long@example.com")
@@ -227,7 +216,7 @@ var _ = Describe("InteractionService", func() {
 			}
 
 			// When: User comments with long text
-			_, _, err := interactionService.CommentPost(user.ID, post.ID, longCommentText)
+			_, _, err := interactionService.CommentPost(user.ID, post.ID, longCommentText, user.Username)
 
 			// Then: Comment is created successfully (if within DB limits)
 			if err != nil {
@@ -244,17 +233,14 @@ var _ = Describe("InteractionService", func() {
 
 		It("should fail when commenting on non-existent post", func() {
 			// Given: Interaction service setup
-			likeRepo := postgresRepo.NewLikeRepository(sharedContainers.DB)
-			commentRepo := postgresRepo.NewCommentRepository(sharedContainers.DB)
-			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, sharedContainers.Cache)
+			interactionService, _, _, _ := createInteractionService()
 
 			// Given: User exists but post doesn't
 			user := createTestUser(sharedContainers.DB, "nonexistentcomment", "nonexistent@example.com")
 			nonExistentPostID := uint(99999)
 
 			// When: User tries to comment on non-existent post
-			_, _, err := interactionService.CommentPost(user.ID, nonExistentPostID, "This comment will fail")
+			_, _, err := interactionService.CommentPost(user.ID, nonExistentPostID, "This comment will fail", user.Username)
 
 			// Then: Comment fails due to foreign key constraint
 			Expect(err).To(HaveOccurred())
@@ -263,10 +249,7 @@ var _ = Describe("InteractionService", func() {
 
 		It("should handle multiple users commenting on same post", func() {
 			// Given: Interaction service setup
-			likeRepo := postgresRepo.NewLikeRepository(sharedContainers.DB)
-			commentRepo := postgresRepo.NewCommentRepository(sharedContainers.DB)
-			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			interactionService := service.NewInteractionService(likeRepo, commentRepo, postRepo, sharedContainers.Cache)
+			interactionService, _, commentRepo, postRepo := createInteractionService()
 
 			// Given: Multiple users and one post
 			user1 := createTestUser(sharedContainers.DB, "commenter1", "commenter1@example.com")
@@ -275,9 +258,9 @@ var _ = Describe("InteractionService", func() {
 			post := createTestPost(sharedContainers.DB, user1.ID, "Discussion Post", "This post will have multiple comments")
 
 			// When: Multiple users comment on the same post
-			_, _, err1 := interactionService.CommentPost(user1.ID, post.ID, "First comment!")
-			_, _, err2 := interactionService.CommentPost(user2.ID, post.ID, "Second comment!")
-			_, _, err3 := interactionService.CommentPost(user3.ID, post.ID, "Third comment!")
+			_, _, err1 := interactionService.CommentPost(user1.ID, post.ID, "First comment!", user1.Username)
+			_, _, err2 := interactionService.CommentPost(user2.ID, post.ID, "Second comment!", user2.Username)
+			_, _, err3 := interactionService.CommentPost(user3.ID, post.ID, "Third comment!", user3.Username)
 
 			// Then: All comments succeed
 			Expect(err1).NotTo(HaveOccurred())

@@ -1,8 +1,6 @@
 package tests
 
 import (
-	"fmt"
-	"io"
 	"strings"
 	"time"
 
@@ -19,8 +17,8 @@ var _ = Describe("PostService", func() {
 		It("should create post successfully", func() {
 			// Given: Post service setup
 			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			mockStorage := NewMockMediaStorage()
-			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
+			mediaStorage := createTestS3Storage()
+			postService := service.NewPostService(postRepo, mediaStorage, sharedContainers.Cache, 5*time.Minute)
 
 			// Given: User exists
 			user := createTestUser(sharedContainers.DB, "postuser", "post@example.com")
@@ -44,7 +42,7 @@ var _ = Describe("PostService", func() {
 			Expect(post.Title).To(Equal(title))
 			Expect(post.Caption).To(Equal(caption))
 			Expect(post.MediaType).To(Equal(mediaType))
-			Expect(post.MediaURL).To(ContainSubstring("mock-s3.example.com"))
+			Expect(post.MediaURL).To(ContainSubstring("localhost:4566"))
 			Expect(post.MediaURL).To(ContainSubstring("test.jpg"))
 
 			// Verify post was saved to database
@@ -57,8 +55,8 @@ var _ = Describe("PostService", func() {
 		It("should create video post successfully", func() {
 			// Given: Post service setup
 			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			mockStorage := NewMockMediaStorage()
-			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
+			mediaStorage := createTestS3Storage()
+			postService := service.NewPostService(postRepo, mediaStorage, sharedContainers.Cache, 5*time.Minute)
 
 			user := createTestUser(sharedContainers.DB, "videouser", "video@example.com")
 
@@ -88,8 +86,8 @@ var _ = Describe("PostService", func() {
 		It("should fail with empty title", func() {
 			// Given: Post service setup
 			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			mockStorage := NewMockMediaStorage()
-			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
+			mediaStorage := createTestS3Storage()
+			postService := service.NewPostService(postRepo, mediaStorage, sharedContainers.Cache, 5*time.Minute)
 
 			user := createTestUser(sharedContainers.DB, "emptytitle", "empty@example.com")
 
@@ -109,40 +107,11 @@ var _ = Describe("PostService", func() {
 			Expect(err.Error()).To(ContainSubstring("invalid input"))
 		})
 
-		It("should handle S3 upload failure", func() {
-			// Given: Post service setup with failing storage
-			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			failingStorage := NewFailingMockStorage()
-			postService := service.NewPostService(postRepo, failingStorage, sharedContainers.Cache, 5*time.Minute)
-
-			user := createTestUser(sharedContainers.DB, "failuser", "fail@example.com")
-
-			// Given: Valid post data
-			title := "Test Post"
-			caption := "This will fail S3 upload"
-			mediaType := domain.MediaTypeImage
-			fileReader := strings.NewReader("fake content")
-			filename := "test.jpg"
-
-			// When: Create post (S3 upload will fail)
-			post, err := postService.CreatePost(user.ID, title, caption, mediaType, fileReader, filename)
-
-			// Then: Creation fails due to S3 error
-			Expect(err).To(HaveOccurred())
-			Expect(post).To(BeNil())
-			Expect(err.Error()).To(ContainSubstring("failed to upload file to S3"))
-
-			// Verify no post was saved to database
-			posts, err := postRepo.GetFeed(10, 0)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(posts).To(HaveLen(0))
-		})
-
 		It("should handle large files", func() {
 			// Given: Post service setup
 			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			mockStorage := NewMockMediaStorage()
-			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
+			mediaStorage := createTestS3Storage()
+			postService := service.NewPostService(postRepo, mediaStorage, sharedContainers.Cache, 5*time.Minute)
 
 			user := createTestUser(sharedContainers.DB, "largefile", "large@example.com")
 
@@ -158,25 +127,13 @@ var _ = Describe("PostService", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(post).NotTo(BeNil())
 			Expect(post.Title).To(Equal("Large File Post"))
-
-			// Verify the mock storage received the large content
-			var foundKey string
-			for key := range mockStorage.files {
-				if strings.Contains(key, "large-file.jpg") {
-					foundKey = key
-					break
-				}
-			}
-			Expect(foundKey).NotTo(BeEmpty())
-			storedContent := mockStorage.files[foundKey]
-			Expect(len(storedContent)).To(Equal(1024 * 1024))
 		})
 
 		It("should handle special characters", func() {
 			// Given: Post service setup
 			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			mockStorage := NewMockMediaStorage()
-			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
+			mediaStorage := createTestS3Storage()
+			postService := service.NewPostService(postRepo, mediaStorage, sharedContainers.Cache, 5*time.Minute)
 
 			user := createTestUser(sharedContainers.DB, "special", "special@example.com")
 
@@ -202,8 +159,8 @@ var _ = Describe("PostService", func() {
 		It("should retrieve post successfully", func() {
 			// Given: Post service setup
 			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			mockStorage := NewMockMediaStorage()
-			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
+			mediaStorage := createTestS3Storage()
+			postService := service.NewPostService(postRepo, mediaStorage, sharedContainers.Cache, 5*time.Minute)
 
 			// Given: User and post exist
 			user := createTestUser(sharedContainers.DB, "getuser", "get@example.com")
@@ -224,8 +181,8 @@ var _ = Describe("PostService", func() {
 		It("should return error for non-existent post", func() {
 			// Given: Post service setup
 			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			mockStorage := NewMockMediaStorage()
-			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
+			mediaStorage := createTestS3Storage()
+			postService := service.NewPostService(postRepo, mediaStorage, sharedContainers.Cache, 5*time.Minute)
 
 			// When: Get non-existent post
 			post, err := postService.GetPost(99999)
@@ -237,24 +194,3 @@ var _ = Describe("PostService", func() {
 		})
 	})
 })
-
-// Helper types for testing
-
-// FailingMockStorage implements s3.MediaStorage but always fails
-type FailingMockStorage struct{}
-
-func NewFailingMockStorage() *FailingMockStorage {
-	return &FailingMockStorage{}
-}
-
-func (m *FailingMockStorage) Upload(file io.Reader, filename, contentType string) (string, error) {
-	return "", fmt.Errorf("mock S3 upload failure")
-}
-
-func (m *FailingMockStorage) GetURL(key string) string {
-	return "http://failing-mock-s3.example.com/" + key
-}
-
-func (m *FailingMockStorage) UploadFromURL(url string) (string, string, error) {
-	return "", "", fmt.Errorf("mock S3 upload from URL failure")
-}

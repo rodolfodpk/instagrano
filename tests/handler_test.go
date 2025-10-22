@@ -19,7 +19,9 @@ import (
 	"github.com/rodolfodpk/instagrano/internal/handler"
 	"github.com/rodolfodpk/instagrano/internal/middleware"
 	postgresRepo "github.com/rodolfodpk/instagrano/internal/repository/postgres"
+	"github.com/rodolfodpk/instagrano/internal/repository/s3"
 	"github.com/rodolfodpk/instagrano/internal/service"
+	"github.com/rodolfodpk/instagrano/internal/webclient"
 )
 
 var _ = Describe("PostHandler", func() {
@@ -30,8 +32,8 @@ var _ = Describe("PostHandler", func() {
 			post := createTestPost(sharedContainers.DB, user.ID, "Test Post", "Test Caption")
 
 			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			mockStorage := NewMockMediaStorage()
-			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
+			mediaStorage := createTestS3Storage()
+			postService := service.NewPostService(postRepo, mediaStorage, sharedContainers.Cache, 5*time.Minute)
 
 			logger, _ := zap.NewProduction()
 			defer logger.Sync()
@@ -59,8 +61,8 @@ var _ = Describe("PostHandler", func() {
 		It("should return 404 for non-existent post", func() {
 			// Given: Post handler
 			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			mockStorage := NewMockMediaStorage()
-			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
+			mediaStorage := createTestS3Storage()
+			postService := service.NewPostService(postRepo, mediaStorage, sharedContainers.Cache, 5*time.Minute)
 
 			logger, _ := zap.NewProduction()
 			defer logger.Sync()
@@ -83,8 +85,8 @@ var _ = Describe("PostHandler", func() {
 		It("should return 400 for invalid post ID", func() {
 			// Given: Post handler
 			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			mockStorage := NewMockMediaStorage()
-			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
+			mediaStorage := createTestS3Storage()
+			postService := service.NewPostService(postRepo, mediaStorage, sharedContainers.Cache, 5*time.Minute)
 
 			logger, _ := zap.NewProduction()
 			defer logger.Sync()
@@ -107,15 +109,37 @@ var _ = Describe("PostHandler", func() {
 
 	Describe("CreatePost", func() {
 		It("should create post successfully", func() {
-			Skip("Skipping due to network timeout issues with image download")
 			// Given: User exists and post handler
 			user := createTestUser(sharedContainers.DB, "testuser", "test@example.com")
 			token, err := createTestJWT(user.ID)
 			Expect(err).NotTo(HaveOccurred())
 
 			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			mockStorage := NewMockMediaStorage()
-			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
+
+			// Create S3 storage with mock controller enabled
+			cfg := &config.Config{
+				S3Endpoint: "http://localhost:4566",
+				S3Region:   "us-east-1",
+				S3Bucket:   "test-bucket",
+			}
+			webclientConfig := webclient.Config{
+				UseMockController: true,
+				MockBaseURL:       "http://localhost:8080",
+				RealURLTimeout:    cfg.WebclientTimeout,
+			}
+			mediaStorage, err := s3.NewMediaStorage(
+				cfg.S3Endpoint,
+				cfg.S3Region,
+				cfg.S3Bucket,
+				webclientConfig,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create S3 bucket if it doesn't exist
+			err = mediaStorage.CreateBucketIfNotExists()
+			Expect(err).NotTo(HaveOccurred())
+
+			postService := service.NewPostService(postRepo, mediaStorage, sharedContainers.Cache, 5*time.Minute)
 
 			logger, _ := zap.NewProduction()
 			defer logger.Sync()
@@ -124,8 +148,8 @@ var _ = Describe("PostHandler", func() {
 
 			// Create Fiber app with auth middleware
 			app := fiber.New()
-			cfg := &config.Config{JWTSecret: "test-secret"}
-			app.Use(middleware.JWT(cfg.JWTSecret))
+			appCfg := &config.Config{JWTSecret: "test-secret"}
+			app.Use(middleware.JWT(appCfg.JWTSecret))
 			app.Post("/posts", postHandler.CreatePost)
 
 			// When: Create post
@@ -164,8 +188,8 @@ var _ = Describe("PostHandler", func() {
 		It("should return 401 without authentication", func() {
 			// Given: Post handler
 			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			mockStorage := NewMockMediaStorage()
-			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
+			mediaStorage := createTestS3Storage()
+			postService := service.NewPostService(postRepo, mediaStorage, sharedContainers.Cache, 5*time.Minute)
 
 			logger, _ := zap.NewProduction()
 			defer logger.Sync()
@@ -174,8 +198,8 @@ var _ = Describe("PostHandler", func() {
 
 			// Create Fiber app with auth middleware
 			app := fiber.New()
-			cfg := &config.Config{JWTSecret: "test-secret"}
-			app.Use(middleware.JWT(cfg.JWTSecret))
+			appCfg := &config.Config{JWTSecret: "test-secret"}
+			app.Use(middleware.JWT(appCfg.JWTSecret))
 			app.Post("/posts", postHandler.CreatePost)
 
 			// When: Create post without authentication
@@ -200,8 +224,8 @@ var _ = Describe("PostHandler", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			postRepo := postgresRepo.NewPostRepository(sharedContainers.DB)
-			mockStorage := NewMockMediaStorage()
-			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
+			mediaStorage := createTestS3Storage()
+			postService := service.NewPostService(postRepo, mediaStorage, sharedContainers.Cache, 5*time.Minute)
 
 			logger, _ := zap.NewProduction()
 			defer logger.Sync()
@@ -210,8 +234,8 @@ var _ = Describe("PostHandler", func() {
 
 			// Create Fiber app with auth middleware
 			app := fiber.New()
-			cfg := &config.Config{JWTSecret: "test-secret"}
-			app.Use(middleware.JWT(cfg.JWTSecret))
+			appCfg := &config.Config{JWTSecret: "test-secret"}
+			app.Use(middleware.JWT(appCfg.JWTSecret))
 			app.Post("/posts", postHandler.CreatePost)
 
 			// When: Create post with invalid data

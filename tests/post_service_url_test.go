@@ -1,14 +1,13 @@
 package tests
 
 import (
-	"time"
+	"bytes"
+	"encoding/json"
+	"mime/multipart"
+	"net/http/httptest"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/rodolfodpk/instagrano/internal/domain"
-	"github.com/rodolfodpk/instagrano/internal/repository/postgres"
-	"github.com/rodolfodpk/instagrano/internal/service"
 )
 
 const (
@@ -22,134 +21,193 @@ const (
 
 var _ = Describe("PostService URL Tests", func() {
 	Describe("CreatePostFromURL", func() {
-		It("should skip due to network timeout issues", func() {
-			Skip("Skipping due to network timeout issues with via.placeholder.com")
+		It("should create post from image URL", func() {
+			// Given: Test app setup
+			app, _, cleanup := setupTestApp()
+			defer cleanup()
+
+			// Given: User is registered and logged in
+			token := registerAndLogin(app, "urluser", "url@example.com", "pass123")
+
+			// Given: Post data as multipart form
+			var buf bytes.Buffer
+			writer := multipart.NewWriter(&buf)
+
+			// Add form fields
+			writer.WriteField("title", "Test Post from URL")
+			writer.WriteField("caption", "This is a test post from URL")
+			writer.WriteField("media_url", testImageURL)
+
+			err := writer.Close()
+			Expect(err).NotTo(HaveOccurred())
+
+			// When: Create post
+			postReq := httptest.NewRequest("POST", "/api/posts", &buf)
+			postReq.Header.Set("Content-Type", writer.FormDataContentType())
+			postReq.Header.Set("Authorization", "Bearer "+token)
+			postResp, err := app.Test(postReq, 3000) // 3 second timeout for multipart
+
+			// Then: Post creation succeeds
+			Expect(err).NotTo(HaveOccurred())
+			Expect(postResp.StatusCode).To(Equal(201))
+
+			var postResult map[string]interface{}
+			json.NewDecoder(postResp.Body).Decode(&postResult)
+			Expect(postResult).To(HaveKey("id"))
+			Expect(postResult["title"]).To(Equal("Test Post from URL"))
+			Expect(postResult["caption"]).To(Equal("This is a test post from URL"))
 		})
 
 		It("should create post from PNG URL", func() {
-			// Given: Post service setup
-			postRepo := postgres.NewPostRepository(sharedContainers.DB)
-			mockStorage := NewMockMediaStorage()
-			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
+			// Given: Test app setup
+			app, _, cleanup := setupTestApp()
+			defer cleanup()
 
-			// Given: Test user
-			user := &domain.User{
-				Username: "testuser",
-				Email:    "test@example.com",
-				Password: "password123",
-			}
-			userRepo := postgres.NewUserRepository(sharedContainers.DB)
-			err := userRepo.Create(user)
+			// Given: User is registered and logged in
+			token := registerAndLogin(app, "pnguser", "png@example.com", "pass123")
+
+			// Given: Post data as multipart form
+			var buf bytes.Buffer
+			writer := multipart.NewWriter(&buf)
+
+			// Add form fields
+			writer.WriteField("title", "PNG Post")
+			writer.WriteField("caption", "PNG image post")
+			writer.WriteField("media_url", testPNGURL)
+
+			err := writer.Close()
 			Expect(err).NotTo(HaveOccurred())
 
-			// When: Create post from PNG URL
-			post, err := postService.CreatePostFromURL(user.ID, "PNG Post", "PNG from URL", testPNGURL)
+			// When: Create post
+			postReq := httptest.NewRequest("POST", "/api/posts", &buf)
+			postReq.Header.Set("Content-Type", writer.FormDataContentType())
+			postReq.Header.Set("Authorization", "Bearer "+token)
+			postResp, err := app.Test(postReq, 3000)
 
-			// Then: Post is created successfully
+			// Then: Post creation succeeds
 			Expect(err).NotTo(HaveOccurred())
-			Expect(post).NotTo(BeNil())
-			Expect(post.MediaType).To(Equal(domain.MediaTypeImage))
-			Expect(post.MediaURL).To(ContainSubstring("mock-s3"))
+			Expect(postResp.StatusCode).To(Equal(201))
+
+			var postResult map[string]interface{}
+			json.NewDecoder(postResp.Body).Decode(&postResult)
+			Expect(postResult).To(HaveKey("id"))
+			Expect(postResult["title"]).To(Equal("PNG Post"))
 		})
 
 		It("should fail with invalid URL", func() {
-			// Given: Post service setup
-			postRepo := postgres.NewPostRepository(sharedContainers.DB)
-			mockStorage := NewMockMediaStorage()
-			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
+			// Given: Test app setup
+			app, _, cleanup := setupTestApp()
+			defer cleanup()
 
-			// Given: Test user
-			user := &domain.User{
-				Username: "testuser",
-				Email:    "test@example.com",
-				Password: "password123",
-			}
-			userRepo := postgres.NewUserRepository(sharedContainers.DB)
-			err := userRepo.Create(user)
+			// Given: User is registered and logged in
+			token := registerAndLogin(app, "invaliduser", "invalid@example.com", "pass123")
+
+			// Given: Post data with invalid URL
+			var buf bytes.Buffer
+			writer := multipart.NewWriter(&buf)
+
+			writer.WriteField("title", "Invalid URL Post")
+			writer.WriteField("media_url", testInvalidURL)
+
+			err := writer.Close()
 			Expect(err).NotTo(HaveOccurred())
 
-			// When: Create post with malformed URL
-			post, err := postService.CreatePostFromURL(user.ID, "Test Post", "Invalid URL", "not-a-url")
+			// When: Create post
+			postReq := httptest.NewRequest("POST", "/api/posts", &buf)
+			postReq.Header.Set("Content-Type", writer.FormDataContentType())
+			postReq.Header.Set("Authorization", "Bearer "+token)
+			postResp, err := app.Test(postReq, 3000)
 
-			// Then: Creation fails
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("invalid URL format"))
-			Expect(post).To(BeNil())
+			// Then: Post creation fails
+			Expect(err).NotTo(HaveOccurred())
+			Expect(postResp.StatusCode).To(Equal(400))
 		})
 
 		It("should fail with download failure", func() {
-			// Given: Post service setup
-			postRepo := postgres.NewPostRepository(sharedContainers.DB)
-			mockStorage := NewMockMediaStorage()
-			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
+			// Given: Test app setup
+			app, _, cleanup := setupTestApp()
+			defer cleanup()
 
-			// Given: Test user
-			user := &domain.User{
-				Username: "testuser",
-				Email:    "test@example.com",
-				Password: "password123",
-			}
-			userRepo := postgres.NewUserRepository(sharedContainers.DB)
-			err := userRepo.Create(user)
+			// Given: User is registered and logged in
+			token := registerAndLogin(app, "failuser", "fail@example.com", "pass123")
+
+			// Given: Post data with non-existent URL that won't be rewritten by mock controller
+			var buf bytes.Buffer
+			writer := multipart.NewWriter(&buf)
+
+			writer.WriteField("title", "Failed Download Post")
+			writer.WriteField("media_url", "http://nonexistent-domain-that-does-not-exist.com/image.jpg")
+
+			err := writer.Close()
 			Expect(err).NotTo(HaveOccurred())
 
-			// When: Create post with invalid URL
-			post, err := postService.CreatePostFromURL(user.ID, "Test Post", "Invalid URL", testInvalidURL)
+			// When: Create post
+			postReq := httptest.NewRequest("POST", "/api/posts", &buf)
+			postReq.Header.Set("Content-Type", writer.FormDataContentType())
+			postReq.Header.Set("Authorization", "Bearer "+token)
+			postResp, err := app.Test(postReq, 3000)
 
-			// Then: Creation fails
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("invalid URL format"))
-			Expect(post).To(BeNil())
+			// Then: Post creation fails
+			Expect(err).NotTo(HaveOccurred())
+			Expect(postResp.StatusCode).To(Equal(400))
 		})
 
 		It("should fail with empty title", func() {
-			// Given: Post service setup
-			postRepo := postgres.NewPostRepository(sharedContainers.DB)
-			mockStorage := NewMockMediaStorage()
-			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
+			// Given: Test app setup
+			app, _, cleanup := setupTestApp()
+			defer cleanup()
 
-			// Given: Test user
-			user := &domain.User{
-				Username: "testuser",
-				Email:    "test@example.com",
-				Password: "password123",
-			}
-			userRepo := postgres.NewUserRepository(sharedContainers.DB)
-			err := userRepo.Create(user)
+			// Given: User is registered and logged in
+			token := registerAndLogin(app, "emptytitle", "empty@example.com", "pass123")
+
+			// Given: Post data without title
+			var buf bytes.Buffer
+			writer := multipart.NewWriter(&buf)
+
+			writer.WriteField("caption", "Post without title")
+			writer.WriteField("media_url", testImageURL)
+
+			err := writer.Close()
 			Expect(err).NotTo(HaveOccurred())
 
-			// When: Create post with empty title
-			post, err := postService.CreatePostFromURL(user.ID, "", "Caption", testImageURL)
+			// When: Create post
+			postReq := httptest.NewRequest("POST", "/api/posts", &buf)
+			postReq.Header.Set("Content-Type", writer.FormDataContentType())
+			postReq.Header.Set("Authorization", "Bearer "+token)
+			postResp, err := app.Test(postReq, 3000)
 
-			// Then: Creation fails
-			Expect(err).To(HaveOccurred())
-			Expect(err).To(Equal(service.ErrInvalidInput))
-			Expect(post).To(BeNil())
+			// Then: Post creation fails
+			Expect(err).NotTo(HaveOccurred())
+			Expect(postResp.StatusCode).To(Equal(400))
 		})
 
 		It("should fail with empty URL", func() {
-			// Given: Post service setup
-			postRepo := postgres.NewPostRepository(sharedContainers.DB)
-			mockStorage := NewMockMediaStorage()
-			postService := service.NewPostService(postRepo, mockStorage, sharedContainers.Cache, 5*time.Minute)
+			// Given: Test app setup
+			app, _, cleanup := setupTestApp()
+			defer cleanup()
 
-			// Given: Test user
-			user := &domain.User{
-				Username: "testuser",
-				Email:    "test@example.com",
-				Password: "password123",
-			}
-			userRepo := postgres.NewUserRepository(sharedContainers.DB)
-			err := userRepo.Create(user)
+			// Given: User is registered and logged in
+			token := registerAndLogin(app, "emptyurl", "emptyurl@example.com", "pass123")
+
+			// Given: Post data without media_url
+			var buf bytes.Buffer
+			writer := multipart.NewWriter(&buf)
+
+			writer.WriteField("title", "Post without URL")
+			writer.WriteField("caption", "This post has no media URL")
+
+			err := writer.Close()
 			Expect(err).NotTo(HaveOccurred())
 
-			// When: Create post with empty URL
-			post, err := postService.CreatePostFromURL(user.ID, "Title", "Caption", "")
+			// When: Create post
+			postReq := httptest.NewRequest("POST", "/api/posts", &buf)
+			postReq.Header.Set("Content-Type", writer.FormDataContentType())
+			postReq.Header.Set("Authorization", "Bearer "+token)
+			postResp, err := app.Test(postReq, 3000)
 
-			// Then: Creation fails
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("media URL is required"))
-			Expect(post).To(BeNil())
+			// Then: Post creation fails (no media provided)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(postResp.StatusCode).To(Equal(400))
 		})
 	})
 })

@@ -95,8 +95,9 @@ func (c *DefaultHTTPClient) rewriteToMockURL(originalURL string) string {
 	// Only map known test URLs to our static image for better performance
 	if strings.Contains(originalURL, "placeholder.com") ||
 		strings.Contains(originalURL, "httpbin.org") ||
-		strings.Contains(originalURL, "example.com") {
-		return c.config.MockBaseURL + "/static/test-image.jpg"
+		strings.Contains(originalURL, "example.com") ||
+		strings.Contains(originalURL, "localhost") {
+		return c.config.MockBaseURL + "/test/image"
 	}
 
 	// For unmapped URLs, return the original URL (don't rewrite)

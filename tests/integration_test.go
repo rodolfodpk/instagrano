@@ -195,8 +195,10 @@ var _ = Describe("Integration Tests", func() {
 
 			var likeResult map[string]interface{}
 			json.NewDecoder(likeResp.Body).Decode(&likeResult)
-			Expect(likeResult).To(HaveKey("message"))
-			Expect(likeResult["message"]).To(Equal("post liked"))
+			Expect(likeResult).To(HaveKey("post_id"))
+			Expect(likeResult).To(HaveKey("likes_count"))
+			Expect(likeResult["post_id"]).To(Equal(float64(1)))
+			Expect(likeResult["likes_count"]).To(Equal(float64(1)))
 		})
 
 		It("should comment on post successfully", func() {
@@ -247,14 +249,10 @@ var _ = Describe("Integration Tests", func() {
 
 			var commentResult map[string]interface{}
 			json.NewDecoder(commentResp.Body).Decode(&commentResult)
-			Expect(commentResult).To(HaveKey("message"))
-			Expect(commentResult["message"]).To(Equal("comment added"))
-		})
-	})
-
-	Describe("Post Creation from URL", func() {
-		It("should skip URL-based post creation due to network timeout issues", func() {
-			Skip("Skipping URL-based post creation test due to network timeout issues")
+			Expect(commentResult).To(HaveKey("post_id"))
+			Expect(commentResult).To(HaveKey("comments_count"))
+			Expect(commentResult["post_id"]).To(Equal(float64(1)))
+			Expect(commentResult["comments_count"]).To(Equal(float64(1)))
 		})
 	})
 })
