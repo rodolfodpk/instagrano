@@ -118,7 +118,7 @@ var _ = Describe("PostHandler", func() {
 
 			// Create S3 storage with mock controller enabled
 			cfg := &config.Config{
-				S3Endpoint: "http://localhost:4566",
+				S3Endpoint: sharedContainers.S3Endpoint,
 				S3Region:   "us-east-1",
 				S3Bucket:   "test-bucket",
 			}

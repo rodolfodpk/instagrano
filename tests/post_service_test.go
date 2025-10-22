@@ -42,7 +42,7 @@ var _ = Describe("PostService", func() {
 			Expect(post.Title).To(Equal(title))
 			Expect(post.Caption).To(Equal(caption))
 			Expect(post.MediaType).To(Equal(mediaType))
-			Expect(post.MediaURL).To(ContainSubstring("localhost:4566"))
+			Expect(post.MediaURL).To(ContainSubstring("localhost"))
 			Expect(post.MediaURL).To(ContainSubstring("test.jpg"))
 
 			// Verify post was saved to database

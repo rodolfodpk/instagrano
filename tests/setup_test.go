@@ -18,6 +18,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/localstack"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/modules/redis"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -37,10 +38,12 @@ import (
 
 // TestContainers holds container instances
 type TestContainers struct {
-	PostgresContainer *postgres.PostgresContainer
-	RedisContainer    *redis.RedisContainer
-	DB                *sql.DB
-	Cache             cache.Cache
+	PostgresContainer   *postgres.PostgresContainer
+	RedisContainer      *redis.RedisContainer
+	LocalStackContainer *localstack.LocalStackContainer
+	DB                  *sql.DB
+	Cache               cache.Cache
+	S3Endpoint          string
 }
 
 // Global shared containers for Ginkgo
@@ -103,11 +106,28 @@ var _ = BeforeSuite(func() {
 	redisCache, err := cache.NewRedisCache(redisAddr, "", 0, logger)
 	Expect(err).NotTo(HaveOccurred())
 
+	// Start LocalStack container
+	localstackContainer, err := localstack.Run(ctx,
+		"localstack/localstack:3.0",
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Get LocalStack S3 endpoint (host and port)
+	host, err := localstackContainer.Host(ctx)
+	Expect(err).NotTo(HaveOccurred())
+	
+	mappedPort, err := localstackContainer.MappedPort(ctx, "4566/tcp")
+	Expect(err).NotTo(HaveOccurred())
+	
+	s3Endpoint := fmt.Sprintf("http://%s:%s", host, mappedPort.Port())
+
 	sharedContainers = &TestContainers{
-		PostgresContainer: pgContainer,
-		RedisContainer:    redisContainer,
-		DB:                db,
-		Cache:             redisCache,
+		PostgresContainer:   pgContainer,
+		RedisContainer:      redisContainer,
+		LocalStackContainer: localstackContainer,
+		DB:                  db,
+		Cache:               redisCache,
+		S3Endpoint:          s3Endpoint,
 	}
 })
 
@@ -127,6 +147,9 @@ var _ = AfterSuite(func() {
 		}
 		if sharedContainers.DB != nil {
 			sharedContainers.DB.Close()
+		}
+		if sharedContainers.LocalStackContainer != nil {
+			sharedContainers.LocalStackContainer.Terminate(context.Background())
 		}
 		if sharedContainers.PostgresContainer != nil {
 			sharedContainers.PostgresContainer.Terminate(context.Background())
@@ -255,7 +278,7 @@ func setupTestApp() (*fiber.App, *TestContainers, func()) {
 	cfg := &config.Config{
 		JWTSecret:  "test-secret",
 		CacheTTL:   5 * time.Minute,
-		S3Endpoint: "http://localhost:4566",
+		S3Endpoint: sharedContainers.S3Endpoint,
 		S3Region:   "us-east-1",
 		S3Bucket:   "test-bucket",
 	}
@@ -590,18 +613,16 @@ func createTestJWT(userID uint) (string, error) {
 
 // Helper function to create real S3 storage for testing
 func createTestS3Storage() s3.MediaStorage {
-	cfg := config.Load()
-	logger, _ := zap.NewProduction()
-	defer logger.Sync()
-
-	// Ensure S3 region is set for LocalStack
-	if cfg.S3Region == "" {
-		cfg.S3Region = "us-east-1"
+	cfg := &config.Config{
+		S3Endpoint: sharedContainers.S3Endpoint,
+		S3Region:   "us-east-1",
+		S3Bucket:   "test-bucket",
 	}
 
 	webclientConfig := webclient.Config{
-		MockBaseURL:    cfg.WebclientMockBaseURL,
-		RealURLTimeout: cfg.WebclientTimeout,
+		UseMockController: true,
+		MockBaseURL:       "http://localhost:8080",
+		RealURLTimeout:    5 * time.Second,
 	}
 
 	mediaStorage, err := s3.NewMediaStorage(
