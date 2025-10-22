@@ -68,3 +68,9 @@ func (m *MockMediaStorage) UploadFromURL(urlStr string) (string, string, error) 
 
 	return key, contentType, nil
 }
+
+// CreateBucketIfNotExists is a no-op for mock storage
+func (m *MockMediaStorage) CreateBucketIfNotExists() error {
+	// Mock storage doesn't need actual buckets
+	return nil
+}

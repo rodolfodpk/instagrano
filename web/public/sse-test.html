@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSE Test - Real-time Events</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .connecting { background-color: #fff3cd; color: #856404; }
+        .event-log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .event-item {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #007bff;
+            background-color: white;
+        }
+        .event-post_liked { border-left-color: #dc3545; }
+        .event-post_commented { border-left-color: #28a745; }
+        .event-new_post { border-left-color: #17a2b8; }
+        .event-heartbeat { border-left-color: #6c757d; }
+        .event-connected { border-left-color: #28a745; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        .controls {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .token-input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 SSE Real-time Events Test</h1>
+        
+        <div id="status" class="status disconnected">Disconnected</div>
+        
+        <div class="controls">
+            <input type="text" id="tokenInput" class="token-input" 
+                   placeholder="Enter JWT token (get from browser console: localStorage.getItem('token'))">
+            <br>
+            <button id="connectBtn" onclick="connectSSE()">Connect to SSE</button>
+            <button id="disconnectBtn" onclick="disconnectSSE()" disabled>Disconnect</button>
+            <button onclick="clearLog()">Clear Log</button>
+            <button onclick="testLike()">Test Like (Post ID 2)</button>
+        </div>
+        
+        <h3>Event Log:</h3>
+        <div id="eventLog" class="event-log">
+            <div class="event-item">Ready to receive SSE events...</div>
+        </div>
+    </div>
+
+    <script>
+        let eventSource = null;
+        let eventCount = 0;
+
+        function updateStatus(message, className) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${className}`;
+        }
+
+        function addEventLog(type, data, timestamp) {
+            const logEl = document.getElementById('eventLog');
+            const eventEl = document.createElement('div');
+            eventEl.className = `event-item event-${type}`;
+            
+            const time = new Date(timestamp).toLocaleTimeString();
+            eventEl.innerHTML = `
+                <strong>[${time}] ${type.toUpperCase()}</strong><br>
+                <pre>${JSON.stringify(data, null, 2)}</pre>
+            `;
+            
+            logEl.insertBefore(eventEl, logEl.firstChild);
+            eventCount++;
+            
+            // Keep only last 50 events
+            while (logEl.children.length > 50) {
+                logEl.removeChild(logEl.lastChild);
+            }
+        }
+
+        function connectSSE() {
+            const token = document.getElementById('tokenInput').value.trim();
+            if (!token) {
+                alert('Please enter a JWT token');
+                return;
+            }
+
+            if (eventSource) {
+                disconnectSSE();
+            }
+
+            updateStatus('Connecting...', 'connecting');
+            
+            const url = `http://localhost:8080/api/events/stream?token=${encodeURIComponent(token)}`;
+            console.log('Connecting to SSE:', url);
+            
+            eventSource = new EventSource(url);
+
+            eventSource.onopen = () => {
+                updateStatus('Connected to SSE', 'connected');
+                document.getElementById('connectBtn').disabled = true;
+                document.getElementById('disconnectBtn').disabled = false;
+                addEventLog('connection', { status: 'opened' }, Date.now());
+            };
+
+            eventSource.onmessage = (event) => {
+                console.log('SSE message received:', event);
+                addEventLog('message', { data: event.data }, Date.now());
+            };
+
+            eventSource.addEventListener('connected', (event) => {
+                console.log('Connected event:', event);
+                addEventLog('connected', JSON.parse(event.data), Date.now());
+            });
+
+            eventSource.addEventListener('post_liked', (event) => {
+                console.log('Post liked event:', event);
+                const data = JSON.parse(event.data);
+                addEventLog('post_liked', data, Date.now());
+            });
+
+            eventSource.addEventListener('post_commented', (event) => {
+                console.log('Post commented event:', event);
+                const data = JSON.parse(event.data);
+                addEventLog('post_commented', data, Date.now());
+            });
+
+            eventSource.addEventListener('new_post', (event) => {
+                console.log('New post event:', event);
+                const data = JSON.parse(event.data);
+                addEventLog('new_post', data, Date.now());
+            });
+
+            eventSource.addEventListener('post_deleted', (event) => {
+                console.log('Post deleted event:', event);
+                const data = JSON.parse(event.data);
+                addEventLog('post_deleted', data, Date.now());
+            });
+
+            eventSource.addEventListener('heartbeat', (event) => {
+                console.log('Heartbeat event:', event);
+                const data = JSON.parse(event.data);
+                addEventLog('heartbeat', data, Date.now());
+            });
+
+            eventSource.onerror = (error) => {
+                console.error('SSE error:', error);
+                updateStatus('SSE Error - Check console', 'disconnected');
+                addEventLog('error', { error: error.toString() }, Date.now());
+                
+                // Auto-reconnect after 3 seconds
+                setTimeout(() => {
+                    if (eventSource && eventSource.readyState === EventSource.CLOSED) {
+                        console.log('Attempting to reconnect...');
+                        connectSSE();
+                    }
+                }, 3000);
+            };
+        }
+
+        function disconnectSSE() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+                updateStatus('Disconnected', 'disconnected');
+                document.getElementById('connectBtn').disabled = false;
+                document.getElementById('disconnectBtn').disabled = true;
+                addEventLog('connection', { status: 'closed' }, Date.now());
+            }
+        }
+
+        function clearLog() {
+            document.getElementById('eventLog').innerHTML = '<div class="event-item">Log cleared...</div>';
+            eventCount = 0;
+        }
+
+        function testLike() {
+            const token = document.getElementById('tokenInput').value.trim();
+            if (!token) {
+                alert('Please enter a JWT token first');
+                return;
+            }
+
+            fetch('http://localhost:8080/api/posts/2/like', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Like response:', data);
+                addEventLog('test_like', data, Date.now());
+            })
+            .catch(error => {
+                console.error('Like error:', error);
+                addEventLog('test_like_error', { error: error.toString() }, Date.now());
+            });
+        }
+
+        // Auto-fill token from localStorage if available
+        window.addEventListener('load', () => {
+            const savedToken = localStorage.getItem('token');
+            if (savedToken) {
+                document.getElementById('tokenInput').value = savedToken;
+            }
+        });
+    </script>
+</body>
+</html>

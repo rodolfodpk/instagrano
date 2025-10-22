@@ -1,0 +1,235 @@
+package handler
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/rodolfodpk/instagrano/internal/cache"
+	"github.com/rodolfodpk/instagrano/internal/events"
+	"github.com/valyala/fasthttp"
+	"go.uber.org/zap"
+)
+
+type SSEHandler struct {
+	cache     cache.Cache
+	logger    *zap.Logger
+	jwtSecret string
+}
+
+func NewSSEHandler(cache cache.Cache, logger *zap.Logger, jwtSecret string) *SSEHandler {
+	return &SSEHandler{
+		cache:     cache,
+		logger:    logger,
+		jwtSecret: jwtSecret,
+	}
+}
+
+// Stream godoc
+// @Summary      Server-Sent Events stream
+// @Description  Stream real-time events for authenticated user
+// @Tags         events
+// @Produce      text/event-stream
+// @Param        token  query     string  true  "JWT token"
+// @Success      200  {string}  string  "SSE stream"
+// @Failure      401  {object}  object{error=string}
+// @Router       /events/stream [get]
+func (h *SSEHandler) Stream(c *fiber.Ctx) error {
+	h.logger.Info("SSE Stream handler called", zap.String("method", c.Method()), zap.String("path", c.Path()))
+
+	// Get token from query parameter (EventSource doesn't support custom headers)
+	token := c.Query("token")
+	if token == "" {
+		h.logger.Error("missing token in SSE request")
+		return c.Status(401).JSON(fiber.Map{"error": "token required"})
+	}
+
+	// Validate JWT token
+	userID, err := h.validateJWT(token)
+	if err != nil {
+		h.logger.Warn("SSE token validation failed",
+			zap.Error(err),
+			zap.String("token", token[:min(len(token), 20)]+"..."))
+		return c.Status(401).JSON(fiber.Map{"error": "invalid token"})
+	}
+
+	// Set SSE headers
+	c.Set("Content-Type", "text/event-stream")
+	c.Set("Cache-Control", "no-cache")
+	c.Set("Connection", "keep-alive")
+	c.Set("Access-Control-Allow-Origin", "*")
+	c.Set("Access-Control-Allow-Headers", "Cache-Control")
+
+	h.logger.Info("SSE connection established",
+		zap.Uint("user_id", userID))
+
+	// Use Fiber's streaming response for SSE
+	c.Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
+		defer func() {
+			h.logger.Info("SSE stream writer closed", zap.Uint("user_id", userID))
+		}()
+
+		// Create a persistent context for the SSE connection
+		ctx := context.Background()
+
+		// Subscribe to Redis events channel
+		eventCh, err := h.cache.Subscribe(ctx, events.EventChannel)
+		if err != nil {
+			h.logger.Error("failed to subscribe to events channel",
+				zap.Error(err),
+				zap.Uint("user_id", userID))
+			return
+		}
+
+		h.logger.Info("subscribed to Redis events channel",
+			zap.String("channel", events.EventChannel),
+			zap.Uint("user_id", userID))
+
+		// Send initial connection event
+		h.sendSSEEventToWriter(w, "connected", map[string]interface{}{
+			"message": "Connected to real-time updates",
+			"user_id": userID,
+		})
+
+		// Send heartbeat every 5 seconds
+		heartbeatTicker := time.NewTicker(5 * time.Second)
+		defer heartbeatTicker.Stop()
+
+		// Process events
+		h.logger.Info("starting SSE event loop", zap.Uint("user_id", userID))
+
+		for {
+			select {
+			case eventJSON := <-eventCh:
+				// Parse the event
+				var event events.Event
+				if err := json.Unmarshal([]byte(eventJSON), &event); err != nil {
+					h.logger.Error("failed to parse event",
+						zap.Error(err),
+						zap.String("event_json", eventJSON))
+					continue
+				}
+
+				// Log event received (for debugging) - upgrade to Info level
+				h.logger.Info("SSE event received",
+					zap.String("event_type", string(event.Type)),
+					zap.Uint("post_id", event.PostID),
+					zap.Uint("triggered_by_user_id", event.TriggeredByUserID),
+					zap.Uint("current_user_id", userID))
+
+				// Send event to client
+				h.sendSSEEventToWriter(w, string(event.Type), event)
+
+			case <-heartbeatTicker.C:
+				// Send heartbeat to keep connection alive
+				h.sendSSEEventToWriter(w, "heartbeat", map[string]interface{}{
+					"timestamp": time.Now().Unix(),
+				})
+
+			case <-ctx.Done():
+				h.logger.Info("SSE connection closed - context cancelled",
+					zap.Uint("user_id", userID))
+				return
+			}
+		}
+	})
+
+	return nil
+}
+
+// sendSSEEventToWriter sends an SSE-formatted event to a buffered writer
+func (h *SSEHandler) sendSSEEventToWriter(w *bufio.Writer, eventType string, data interface{}) {
+	// Marshal data to JSON
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		h.logger.Error("failed to marshal SSE event data",
+			zap.Error(err),
+			zap.String("event_type", eventType))
+		return
+	}
+
+	// Format as SSE event
+	event := fmt.Sprintf("event: %s\ndata: %s\n\n", eventType, string(jsonData))
+
+	// Send to client and flush immediately
+	if _, err := w.WriteString(event); err != nil {
+		h.logger.Error("failed to write SSE event",
+			zap.Error(err),
+			zap.String("event_type", eventType))
+		return
+	}
+
+	// Flush to ensure immediate delivery
+	if err := w.Flush(); err != nil {
+		h.logger.Error("failed to flush SSE event",
+			zap.Error(err),
+			zap.String("event_type", eventType))
+		return
+	}
+
+	h.logger.Info("SSE event sent",
+		zap.String("event_type", eventType),
+		zap.String("data", string(jsonData)))
+}
+
+// sendSSEEvent sends an SSE-formatted event to the client
+func (h *SSEHandler) sendSSEEvent(c *fiber.Ctx, eventType string, data interface{}) {
+	// Marshal data to JSON
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		h.logger.Error("failed to marshal SSE event data",
+			zap.Error(err),
+			zap.String("event_type", eventType))
+		return
+	}
+
+	// Format as SSE event
+	event := fmt.Sprintf("event: %s\ndata: %s\n\n", eventType, string(jsonData))
+
+	// Send to client
+	if _, err := c.Write([]byte(event)); err != nil {
+		h.logger.Error("failed to write SSE event",
+			zap.Error(err),
+			zap.String("event_type", eventType))
+		return
+	}
+
+	h.logger.Info("SSE event sent",
+		zap.String("event_type", eventType),
+		zap.String("data", string(jsonData)))
+}
+
+// validateJWT validates a JWT token and returns the user ID
+func (h *SSEHandler) validateJWT(tokenString string) (uint, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(h.jwtSecret), nil
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		if userIDFloat, ok := claims["user_id"].(float64); ok {
+			return uint(userIDFloat), nil
+		}
+		return 0, fmt.Errorf("invalid user_id in token")
+	}
+
+	return 0, fmt.Errorf("invalid token")
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}

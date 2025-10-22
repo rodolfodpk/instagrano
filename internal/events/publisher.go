@@ -55,7 +55,7 @@ func (p *Publisher) Publish(ctx context.Context, event Event) error {
 		return err
 	}
 
-	p.logger.Debug("event published",
+	p.logger.Info("event published successfully",
 		zap.String("event_type", string(event.Type)),
 		zap.Uint("post_id", event.PostID),
 		zap.Uint("triggered_by_user_id", event.TriggeredByUserID))
@@ -85,13 +85,24 @@ func (p *Publisher) PublishPostLiked(ctx context.Context, postID uint, triggered
 	return p.Publish(ctx, event)
 }
 
-// PublishPostCommented publishes a post commented event
-func (p *Publisher) PublishPostCommented(ctx context.Context, postID uint, triggeredByUserID uint, likesCount, commentsCount int) error {
+// PublishPostCommented publishes a post commented event with full comment data
+func (p *Publisher) PublishPostCommented(ctx context.Context, postID uint, triggeredByUserID uint, likesCount, commentsCount int, comment *Comment) error {
 	event := Event{
 		Type:              EventTypePostCommented,
 		PostID:            postID,
 		TriggeredByUserID: triggeredByUserID,
-		Data:              PostInteractionData{LikesCount: likesCount, CommentsCount: commentsCount},
+		Data:              PostInteractionData{LikesCount: likesCount, CommentsCount: commentsCount, Comment: comment},
+	}
+	return p.Publish(ctx, event)
+}
+
+// PublishPostDeleted publishes a post deleted event
+func (p *Publisher) PublishPostDeleted(ctx context.Context, postID uint, triggeredByUserID uint) error {
+	event := Event{
+		Type:              EventTypePostDeleted,
+		PostID:            postID,
+		TriggeredByUserID: triggeredByUserID,
+		Data:              nil, // No additional data needed for deletion
 	}
 	return p.Publish(ctx, event)
 }

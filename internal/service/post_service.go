@@ -67,6 +67,9 @@ func (s *PostService) CreatePost(userID uint, title, caption string, mediaType d
 		return nil, err
 	}
 
+	// Invalidate feed cache to ensure new post appears
+	s.invalidateFeedCache()
+
 	return post, nil
 }
 
@@ -146,5 +149,52 @@ func (s *PostService) CreatePostFromURL(userID uint, title, caption, mediaURL st
 		return nil, err
 	}
 
+	// Invalidate feed cache to ensure new post appears
+	s.invalidateFeedCache()
+
 	return post, nil
+}
+
+// invalidateFeedCache clears feed cache entries
+func (s *PostService) invalidateFeedCache() {
+	ctx := context.Background()
+
+	// Clear the most common feed cache key (empty cursor, default limit)
+	// This is a simple approach - in production you might want to clear all feed patterns
+	cacheKey := "feed:cursor::limit:5" // Default feed cache key
+	if err := s.cache.Delete(ctx, cacheKey); err != nil {
+		s.logger.Warn("failed to clear feed cache",
+			zap.String("cache_key", cacheKey),
+			zap.Error(err))
+	} else {
+		s.logger.Info("cleared feed cache", zap.String("cache_key", cacheKey))
+	}
+}
+
+// DeletePost deletes a post by ID (only by the post author)
+func (s *PostService) DeletePost(postID, userID uint) error {
+	// First, get the post to check ownership
+	post, err := s.postRepo.GetByID(postID)
+	if err != nil {
+		return fmt.Errorf("post not found")
+	}
+
+	// Check if the user is the author of the post
+	if post.UserID != userID {
+		return fmt.Errorf("unauthorized")
+	}
+
+	// Delete the post (this will cascade delete likes and comments due to foreign key constraints)
+	if err := s.postRepo.Delete(postID); err != nil {
+		return fmt.Errorf("failed to delete post: %w", err)
+	}
+
+	// Invalidate feed cache to ensure deleted post disappears
+	s.invalidateFeedCache()
+
+	s.logger.Info("post deleted successfully",
+		zap.Uint("post_id", postID),
+		zap.Uint("user_id", userID))
+
+	return nil
 }

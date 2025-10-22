@@ -2,24 +2,203 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Instagrano - Feed</title>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>
-        body { font-family: Arial; max-width: 600px; margin: 20px auto; }
-        .post { border: 1px solid #ddd; margin: 20px 0; padding: 15px; }
-        .post-header { font-weight: bold; margin-bottom: 10px; }
-        .post-image { width: 100%; max-width: 500px; }
-        .post-actions { margin-top: 10px; }
-        button { padding: 5px 10px; margin-right: 10px; }
-        .like-btn { background: #e74c3c; color: white; border: none; }
-        .comment-btn { background: #3498db; color: white; border: none; }
+        * { box-sizing: border-box; }
+        body { font-family: Arial; max-width: 600px; margin: 20px auto; padding: 0 20px; }
+        
+        /* Modern Post Card Design */
+        .post-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin: 20px auto;
+            max-width: 600px;
+            overflow: hidden;
+            transition: box-shadow 0.3s ease;
+        }
+        .post-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+        .post-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #efefef;
+        }
+        .user-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .username {
+            font-weight: 600;
+            font-size: 14px;
+            color: #262626;
+        }
+        .post-date {
+            font-size: 12px;
+            color: #8e8e8e;
+        }
+        .post-content { padding: 16px 20px; }
+        .post-title {
+            font-weight: 600;
+            font-size: 18px;
+            margin-bottom: 8px;
+            color: #262626;
+        }
+        .post-caption {
+            font-size: 14px;
+            color: #262626;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+        .post-image {
+            width: 100%;
+            border-radius: 8px;
+            max-height: 500px;
+            object-fit: cover;
+        }
+        .post-actions {
+            padding: 12px 20px;
+            border-top: 1px solid #efefef;
+            display: flex;
+            gap: 16px;
+        }
+        .action-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        .action-btn:hover { background: #f5f5f5; }
+        .like-btn { color: #ed4956; }
+        .comment-btn { color: #0095f6; }
+        .delete-btn {
+            color: #ed4956;
+            margin-left: auto;
+        }
+        .comment-form {
+            padding: 16px 20px;
+            border-top: 1px solid #efefef;
+            display: flex;
+            gap: 12px;
+        }
+        .comment-input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #dbdbdb;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .comment-submit {
+            background: #0095f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .comment-submit:hover { background: #0084d4; }
+        
+        /* Comments Section (Instagram-like styling) */
+        .comments-section {
+            margin-top: 12px;
+            border-top: 1px solid #efefef;
+            padding-top: 12px;
+            padding: 12px 20px;
+        }
+        .comments-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .comment-item {
+            padding: 8px 0;
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+        }
+        .comment-username {
+            font-weight: 600;
+            color: #262626;
+            flex-shrink: 0;
+        }
+        .comment-text {
+            color: #262626;
+            flex-grow: 1;
+        }
+        .comment-time {
+            color: #8e8e8e;
+            font-size: 12px;
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+        .no-comments {
+            color: #8e8e8e;
+            text-align: center;
+            padding: 20px;
+        }
+        
         .error { color: red; }
         .loading { text-align: center; }
+        
+        /* Responsive Design - Mobile */
+        @media (max-width: 480px) {
+            body { margin: 10px auto; padding: 0 10px; }
+            h1 { font-size: 1.5rem; }
+            .post-card { margin: 15px 0; }
+            .post-header { padding: 12px 16px; }
+            .post-content { padding: 12px 16px; }
+            .post-actions { padding: 10px 16px; gap: 12px; }
+            .action-btn { padding: 10px 12px; font-size: 14px; min-height: 44px; }
+            .comment-form { padding: 12px 16px; }
+            .comment-input { padding: 12px; font-size: 16px; }
+            .comment-submit { padding: 12px 16px; }
+            input[type="text"], input[type="file"], select { 
+                padding: 12px; 
+                font-size: 16px; 
+                margin: 8px 0;
+            }
+            /* Upload method radio buttons - stack on very small screens */
+            .post label { 
+                display: block; 
+                margin: 8px 0;
+            }
+        }
+        
+        /* Responsive Design - Small Mobile */
+        @media (max-width: 360px) {
+            button { 
+                font-size: 13px;
+                padding: 8px 12px;
+            }
+            h1 { font-size: 1.3rem; }
+        }
+        
+        /* Responsive Design - Tablet */
+        @media (min-width: 481px) and (max-width: 768px) {
+            body { margin: 15px auto; }
+            button { padding: 8px 12px; }
+        }
     </style>
 </head>
 <body>
     <div x-data="feedApp()">
         <h1>Instagrano Feed</h1>
+        
+        <!-- Current User Display -->
+        <div x-show="currentUser" style="background: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #007bff;">
+            <strong>Welcome, <span x-text="currentUser.username"></span>!</strong>
+            <span style="color: #666; font-size: 0.9em; margin-left: 10px;">
+                (<span x-text="currentUser.email"></span>)
+            </span>
+        </div>
+        
         <button @click="logout">Logout</button>
         
         <!-- Post Creation Form -->
@@ -46,7 +225,7 @@
             
             <!-- File Upload -->
             <div x-show="uploadMethod === 'file'">
-                <input type="file" x-ref="fileInput" accept="image/*,video/*" style="width: 100%; padding: 10px; margin: 5px 0;">
+            <input type="file" x-ref="fileInput" accept="image/*,video/*" style="width: 100%; padding: 10px; margin: 5px 0;">
             </div>
             
             <!-- URL Upload -->
@@ -74,22 +253,48 @@
 
         <div x-show="posts.length > 0">
             <template x-for="post in posts" :key="post.id">
-                <div class="post" :data-post-id="post.id">
-                <div class="post-header">Post #<span x-text="post.id"></span></div>
-                <div x-text="post.title"></div>
-                <div x-text="post.caption"></div>
+                <div class="post-card" :data-post-id="post.id">
+                    <div class="post-header">
+                        <div class="user-info">
+                            <span class="username" x-text="post.username"></span>
+                            <span class="post-date" x-text="formatDate(post.created_at)"></span>
+                        </div>
+                    </div>
+                    <div class="post-content">
+                        <h3 class="post-title" x-text="post.title"></h3>
+                        <p class="post-caption" x-text="post.caption"></p>
                 <img :src="post.media_url" :alt="post.title" class="post-image">
+                    </div>
                 <div class="post-actions">
-                    <button class="like-btn" @click="likePost(post.id)">
-                        Like (<span x-text="post.likes_count"></span>)
+                        <button class="action-btn like-btn" @click="likePost(post.id)">
+                            ❤️ <span x-text="post.likes_count"></span>
+                        </button>
+                        <button class="action-btn comment-btn" @click="showCommentForm(post.id)">
+                            💬 <span x-text="post.comments_count"></span>
                     </button>
-                    <button class="comment-btn" @click="showCommentForm(post.id)">
-                        Comment (<span x-text="post.comments_count"></span>)
+                        <button class="action-btn delete-btn" @click="deletePost(post.id)">
+                            🗑️
                     </button>
                 </div>
-                <div x-show="commentingPostId === post.id">
-                    <input x-model="newComment" placeholder="Add a comment...">
-                    <button @click="addComment(post.id)">Post</button>
+                    <div class="comment-form" x-show="commentingPostId === post.id">
+                        <input x-model="newComment" placeholder="Add a comment..." class="comment-input">
+                        <button @click="addComment(post.id)" class="comment-submit">Post</button>
+                    </div>
+                    
+                    <!-- Comments Section -->
+                    <div class="comments-section" x-show="post.showComments">
+                        <div class="comments-list" x-show="post.comments && post.comments.length > 0">
+                            <template x-for="comment in post.comments" :key="comment.id">
+                                <div class="comment-item">
+                                    <span class="comment-username" x-text="comment.username"></span>
+                                    <span class="comment-text" x-text="comment.text"></span>
+                                    <span class="comment-time" x-text="formatDate(comment.created_at)"></span>
+                                </div>
+                            </template>
+                        </div>
+                        <div x-show="!post.comments || post.comments.length === 0" class="no-comments">
+                            No comments yet
+                        </div>
                 </div>
                 </div>
             </template>
@@ -131,6 +336,24 @@
             activeViews: {}, // Track active view sessions (postId -> started_at timestamp)
             observer: null,
             eventSource: null, // SSE connection
+            currentUser: null, // Current logged-in user info
+            
+            formatDate(dateString) {
+                const date = new Date(dateString);
+                const now = new Date();
+                const diffInMs = now - date;
+                const diffInHours = diffInMs / (1000 * 60 * 60);
+                
+                if (diffInHours < 1) {
+                    return 'Just now';
+                } else if (diffInHours < 24) {
+                    return Math.floor(diffInHours) + 'h ago';
+                } else if (diffInHours < 168) {
+                    return Math.floor(diffInHours / 24) + 'd ago';
+                } else {
+                    return date.toLocaleDateString();
+                }
+            },
             
             async init() {
                 const token = localStorage.getItem('token');
@@ -138,6 +361,7 @@
                     window.location.href = '/';
                     return;
                 }
+                await this.loadCurrentUser();
                 await this.loadFeed();
                 this.setupViewTracking();
                 this.connectSSE();
@@ -147,6 +371,28 @@
                     this.endAllActiveViews();
                     this.disconnectSSE();
                 });
+            },
+            
+            async loadCurrentUser() {
+                try {
+                    const token = localStorage.getItem('token');
+                    const response = await fetch('/api/auth/me', {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const userData = await response.json();
+                        this.currentUser = userData.user;
+                    } else {
+                        console.error('Failed to load current user');
+                        this.currentUser = { username: 'Unknown User' };
+                    }
+                } catch (error) {
+                    console.error('Error loading current user:', error);
+                    this.currentUser = { username: 'Unknown User' };
+                }
             },
             
             resetFeed() {
@@ -165,9 +411,9 @@
                     // Validate input based on upload method
                     if (this.uploadMethod === 'file') {
                         const fileInput = this.$refs.fileInput;
-                        if (!fileInput.files[0]) {
-                            this.error = 'Please select a file';
-                            return;
+                    if (!fileInput.files[0]) {
+                        this.error = 'Please select a file';
+                        return;
                         }
                     } else if (this.uploadMethod === 'url') {
                         if (!this.newPost.mediaUrl.trim()) {
@@ -191,12 +437,12 @@
                     // Add media based on upload method
                     if (this.uploadMethod === 'file') {
                         const fileInput = this.$refs.fileInput;
-                        formData.append('media', fileInput.files[0]);
+                    formData.append('media', fileInput.files[0]);
                     } else if (this.uploadMethod === 'url') {
                         formData.append('media_url', this.newPost.mediaUrl);
                     }
                     
-                    const response = await fetch('http://localhost:8080/api/posts', {
+                    const response = await fetch('/api/posts', {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${token}`
@@ -216,7 +462,7 @@
                         this.newPost.mediaUrl = '';
                         if (this.uploadMethod === 'file') {
                             const fileInput = this.$refs.fileInput;
-                            fileInput.value = '';
+                        fileInput.value = '';
                         }
                         
                         // Reset pagination state and reload feed
@@ -243,8 +489,8 @@
                     
                     // Use cursor-based pagination with configurable page size
                     const url = this.nextCursor 
-                        ? `http://localhost:8080/api/feed?limit=${this.pageSize}&cursor=${this.nextCursor}`
-                        : `http://localhost:8080/api/feed?limit=${this.pageSize}`;
+                        ? `/api/feed?limit=${this.pageSize}&cursor=${this.nextCursor}`
+                        : `/api/feed?limit=${this.pageSize}`;
                     
                     const response = await fetch(url, {
                         headers: {'Authorization': `Bearer ${token}`}
@@ -254,18 +500,28 @@
                     
                     if (response.ok) {
                         const data = await response.json();
+                        console.log('Feed data received:', data);
+                        console.log('Posts count:', data.posts ? data.posts.length : 0);
                         
                         // Check if this is cursor-based response
                         if (data.has_more !== undefined) {
-                            // Cursor-based pagination
+                            // Cursor-based pagination - replace posts for initial load, append for pagination
+                            if (this.nextCursor) {
+                                // Pagination: append new posts
                             this.posts = [...this.posts, ...(data.posts || [])];
+                            } else {
+                                // Initial load: replace posts
+                                this.posts = data.posts || [];
+                            }
                             this.hasMore = data.has_more;
                             this.nextCursor = data.next_cursor || '';
+                            console.log('Updated posts array length:', this.posts.length);
                         } else {
                             // Fallback to page-based pagination
                             this.posts = data.posts || [];
                             this.hasMore = false;
                             this.nextCursor = '';
+                            console.log('Set posts array length:', this.posts.length);
                         }
                         
                         // Re-observe posts for view tracking
@@ -289,7 +545,7 @@
                     this.loadingMore = true;
                     const token = localStorage.getItem('token');
                     
-                    const url = `http://localhost:8080/api/feed?limit=${this.pageSize}&cursor=${this.nextCursor}`;
+                    const url = `/api/feed?limit=${this.pageSize}&cursor=${this.nextCursor}`;
                     const response = await fetch(url, {
                         headers: {'Authorization': `Bearer ${token}`}
                     });
@@ -317,43 +573,120 @@
             async likePost(postId) {
                 try {
                     const token = localStorage.getItem('token');
-                        const response = await fetch(`http://localhost:8080/api/posts/${postId}/like`, {
+                    const response = await fetch(`/api/posts/${postId}/like`, {
                         method: 'POST',
                         headers: {'Authorization': `Bearer ${token}`}
                     });
                     
                     if (response.ok) {
                         await this.loadFeed(); // Reload to get updated counts
+                    } else if (response.status === 400) {
+                        // Handle duplicate like gracefully - just reload to show current state
+                        console.log('Post already liked or error occurred');
+                        await this.loadFeed();
                     }
                 } catch (e) {
-                    this.error = 'Failed to like post';
+                    console.error('Error liking post:', e);
                 }
             },
             
-            showCommentForm(postId) {
+            async deletePost(postId) {
+                if (!confirm('Are you sure you want to delete this post? This action cannot be undone.')) {
+                    return;
+                }
+                
+                try {
+                    const token = localStorage.getItem('token');
+                    const response = await fetch(`/api/posts/${postId}`, {
+                        method: 'DELETE',
+                        headers: {'Authorization': `Bearer ${token}`}
+                    });
+                    
+                    if (response.ok) {
+                        // Remove the post from the local array immediately for better UX
+                        this.posts = this.posts.filter(post => post.id !== postId);
+                        console.log('Post deleted successfully');
+                    } else {
+                        const errorData = await response.json();
+                        this.error = `Failed to delete post: ${errorData.error || 'Unknown error'}`;
+                        console.error('Post deletion failed:', errorData);
+                    }
+                } catch (e) {
+                    this.error = `Failed to delete post: ${e.message}`;
+                    console.error('Post deletion error:', e);
+                }
+            },
+            
+            async showCommentForm(postId) {
                 this.commentingPostId = postId;
                 this.newComment = '';
+                
+                // Load comments when opening (Instagram behavior)
+                const post = this.posts.find(p => p.id === postId);
+                if (post && !post.comments) {
+                    await this.loadComments(postId);
+                }
+                
+                // Toggle comments visibility
+                const postIndex = this.posts.findIndex(p => p.id === postId);
+                if (postIndex !== -1) {
+                    const updatedPosts = [...this.posts];
+                    updatedPosts[postIndex].showComments = !updatedPosts[postIndex].showComments;
+                    this.posts = updatedPosts;
+                }
+            },
+            
+            async loadComments(postId) {
+                try {
+                    const token = localStorage.getItem('token');
+                    const response = await fetch(`/api/posts/${postId}/comments`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const comments = await response.json();
+                        const postIndex = this.posts.findIndex(p => p.id === postId);
+                        if (postIndex !== -1) {
+                            const updatedPosts = [...this.posts];
+                            updatedPosts[postIndex].comments = comments;
+                            this.posts = updatedPosts;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Failed to load comments:', error);
+                }
             },
             
             async addComment(postId) {
+                if (!this.newComment.trim()) return;
+                
                 try {
                     const token = localStorage.getItem('token');
-                        const response = await fetch(`http://localhost:8080/api/posts/${postId}/comment`, {
+                    const response = await fetch(`/api/posts/${postId}/comment`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({text: this.newComment})
+                        body: JSON.stringify({content: this.newComment})
                     });
                     
                     if (response.ok) {
-                        this.commentingPostId = null;
                         this.newComment = '';
-                        await this.loadFeed(); // Reload to get updated counts
+                        
+                        // Reload comments immediately so user sees their own comment
+                        // WebSocket will handle updates for other users
+                        await this.loadComments(postId);
+                        
+                        console.log('Comment posted and reloaded successfully');
+                    } else {
+                        this.error = 'Failed to add comment';
                     }
                 } catch (e) {
                     this.error = 'Failed to add comment';
+                    console.error('Failed to post comment:', e);
                 }
             },
             
@@ -402,7 +735,7 @@
                 
                 try {
                     const token = localStorage.getItem('token');
-                    const response = await fetch(`http://localhost:8080/api/posts/${postId}/view/start`, {
+                    const response = await fetch(`/api/posts/${postId}/view/start`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${token}`
@@ -426,7 +759,7 @@
                 
                 try {
                     const token = localStorage.getItem('token');
-                    const response = await fetch(`http://localhost:8080/api/posts/${postId}/view/end`, {
+                    const response = await fetch(`/api/posts/${postId}/view/end`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${token}`,
@@ -459,65 +792,105 @@
                 const token = localStorage.getItem('token');
                 if (!token) return;
 
-                const url = `http://localhost:8080/api/events/stream?token=${encodeURIComponent(token)}`;
-                this.eventSource = new EventSource(url);
+                // Use WebSocket instead of EventSource
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const url = `${protocol}//${window.location.host}/api/events/ws?token=${encodeURIComponent(token)}`;
+                this.eventSource = new WebSocket(url);
 
                 this.eventSource.onopen = () => {
-                    console.log('SSE connection opened');
+                    console.log('WebSocket connection opened');
                 };
 
                 this.eventSource.onmessage = (event) => {
-                    console.log('SSE message received:', event);
+                    const data = JSON.parse(event.data);
+                    console.log('WebSocket message received:', data);
+                    
+                    // Handle different event types
+                    switch(data.type) {
+                        case 'connected':
+                            console.log('WebSocket connected:', data);
+                            break;
+                            
+                        case 'new_post':
+                            console.log('New post created, but not auto-inserting (Instagram style)');
+                            // Instagram doesn't auto-update your feed when others post
+                            // User will see it when they refresh/scroll
+                            // Could add optional "New posts available" banner here
+                            break;
+                            
+                        case 'post_liked':
+                            console.log('Post liked event received:', data);
+                            // Update like count for the specific post
+                            const likedPostIndex = this.posts.findIndex(post => post.id === data.post_id);
+                            if (likedPostIndex !== -1) {
+                                console.log(`Found post ${data.post_id} at index ${likedPostIndex}, updating counts...`);
+                                // Create a new array to trigger Alpine.js reactivity
+                                const updatedPosts = [...this.posts];
+                                updatedPosts[likedPostIndex] = {
+                                    ...updatedPosts[likedPostIndex],
+                                    likes_count: data.data.likes_count,
+                                    comments_count: data.data.comments_count
+                                };
+                                this.posts = updatedPosts;
+                                console.log(`Updated post ${data.post_id}: likes=${data.data.likes_count}, comments=${data.data.comments_count}`);
+                            } else {
+                                console.log(`Post ${data.post_id} not found in current feed`);
+                            }
+                            break;
+                            
+                        case 'post_commented':
+                            console.log('Post commented event received:', data);
+                            // Update comment count for the specific post
+                            const commentedPostIndex = this.posts.findIndex(post => post.id === data.post_id);
+                            if (commentedPostIndex !== -1) {
+                                console.log(`Found post ${data.post_id} at index ${commentedPostIndex}, updating counts...`);
+                                // Create a new array to trigger Alpine.js reactivity
+                                const updatedPosts = [...this.posts];
+                                updatedPosts[commentedPostIndex] = {
+                                    ...updatedPosts[commentedPostIndex],
+                                    likes_count: data.data.likes_count,
+                                    comments_count: data.data.comments_count
+                                };
+                                
+                                // Add new comment to list if comments section is open and comment data is present
+                                if (updatedPosts[commentedPostIndex].showComments && data.data.comment) {
+                                    const comments = updatedPosts[commentedPostIndex].comments || [];
+                                    updatedPosts[commentedPostIndex].comments = [...comments, data.data.comment];
+                                }
+                                
+                                this.posts = updatedPosts;
+                                console.log(`Updated post ${data.post_id}: likes=${data.data.likes_count}, comments=${data.data.comments_count}`);
+                            } else {
+                                console.log(`Post ${data.post_id} not found in current feed`);
+                            }
+                            break;
+                            
+                        case 'post_deleted':
+                            console.log('Post deleted event:', data);
+                            // Remove the deleted post from the feed
+                            this.posts = this.posts.filter(post => post.id !== data.post_id);
+                            console.log(`Removed post ${data.post_id} from feed`);
+                            break;
+                            
+                        case 'heartbeat':
+                            console.log('WebSocket heartbeat:', data);
+                            break;
+                            
+                        default:
+                            console.log('Unknown event type:', data.type);
+                    }
                 };
 
-                this.eventSource.addEventListener('connected', (event) => {
-                    console.log('SSE connected:', event.data);
-                });
-
-                this.eventSource.addEventListener('new_post', (event) => {
-                    const data = JSON.parse(event.data);
-                    console.log('New post event:', data);
-                    
-                    // Add new post to the beginning of the feed
-                    if (data.post) {
-                        this.posts.unshift(data.post);
-                    }
-                });
-
-                this.eventSource.addEventListener('post_liked', (event) => {
-                    const data = JSON.parse(event.data);
-                    console.log('Post liked event:', data);
-                    
-                    // Update like count for the specific post
-                    const postIndex = this.posts.findIndex(post => post.id === data.post_id);
-                    if (postIndex !== -1) {
-                        this.posts[postIndex].likes_count = data.data.likes_count;
-                        this.posts[postIndex].comments_count = data.data.comments_count;
-                    }
-                });
-
-                this.eventSource.addEventListener('post_commented', (event) => {
-                    const data = JSON.parse(event.data);
-                    console.log('Post commented event:', data);
-                    
-                    // Update comment count for the specific post
-                    const postIndex = this.posts.findIndex(post => post.id === data.post_id);
-                    if (postIndex !== -1) {
-                        this.posts[postIndex].likes_count = data.data.likes_count;
-                        this.posts[postIndex].comments_count = data.data.comments_count;
-                    }
-                });
-
-                this.eventSource.addEventListener('heartbeat', (event) => {
-                    console.log('SSE heartbeat:', event.data);
-                });
-
                 this.eventSource.onerror = (error) => {
-                    console.error('SSE error:', error);
+                    console.error('WebSocket error:', error);
+                };
+
+                this.eventSource.onclose = () => {
+                    console.log('WebSocket connection closed');
                     // Attempt to reconnect after 5 seconds
                     setTimeout(() => {
-                        if (this.eventSource && this.eventSource.readyState === EventSource.CLOSED) {
-                            console.log('Attempting to reconnect SSE...');
+                        if (!this.eventSource || this.eventSource.readyState === WebSocket.CLOSED) {
+                            console.log('Attempting to reconnect WebSocket...');
                             this.connectSSE();
                         }
                     }, 5000);
@@ -528,7 +901,7 @@
                 if (this.eventSource) {
                     this.eventSource.close();
                     this.eventSource = null;
-                    console.log('SSE connection closed');
+                    console.log('WebSocket connection closed');
                 }
             },
 

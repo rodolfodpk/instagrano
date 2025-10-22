@@ -5,6 +5,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/rodolfodpk/instagrano/internal/domain"
+	"github.com/rodolfodpk/instagrano/internal/dto"
 	"github.com/rodolfodpk/instagrano/internal/events"
 	"github.com/rodolfodpk/instagrano/internal/service"
 	"go.uber.org/zap"
@@ -72,7 +73,7 @@ func (h *PostHandler) CreatePost(c *fiber.Ctx) error {
 			// Don't fail the request if event publishing fails
 		}
 
-		return c.Status(201).JSON(post)
+		return c.Status(201).JSON(dto.ToPostResponse(post))
 	}
 
 	// Otherwise, handle file upload (existing logic)
@@ -133,5 +134,48 @@ func (h *PostHandler) GetPost(c *fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "post not found"})
 	}
 
-	return c.JSON(post)
+	return c.JSON(dto.ToPostResponse(post))
+}
+
+// DeletePost godoc
+// @Summary      Delete a post
+// @Description  Delete a post by ID (only by the post author)
+// @Tags         posts
+// @Produce      json
+// @Param        id   path      int  true  "Post ID"
+// @Success      200  {object}  map[string]string
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Failure      404  {object}  map[string]string
+// @Security     Bearer
+// @Router       /posts/{id} [delete]
+func (h *PostHandler) DeletePost(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uint)
+	postID, err := strconv.ParseUint(c.Params("id"), 10, 32)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid post id"})
+	}
+
+	err = h.postService.DeletePost(uint(postID), userID)
+	if err != nil {
+		if err.Error() == "post not found" {
+			return c.Status(404).JSON(fiber.Map{"error": "post not found"})
+		}
+		if err.Error() == "unauthorized" {
+			return c.Status(403).JSON(fiber.Map{"error": "you can only delete your own posts"})
+		}
+		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// Publish post deleted event
+	if err := h.eventPublisher.PublishPostDeleted(c.Context(), uint(postID), userID); err != nil {
+		h.logger.Error("failed to publish post deleted event",
+			zap.Error(err),
+			zap.Uint("post_id", uint(postID)),
+			zap.Uint("user_id", userID))
+		// Don't fail the request if event publishing fails
+	}
+
+	return c.JSON(fiber.Map{"message": "post deleted successfully"})
 }

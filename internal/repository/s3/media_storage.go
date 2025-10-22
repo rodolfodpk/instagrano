@@ -20,6 +20,7 @@ type MediaStorage interface {
 	Upload(file io.Reader, filename string, contentType string) (string, error)
 	UploadFromURL(url string) (string, string, error) // NEW: returns (key, contentType, error)
 	GetURL(key string) string
+	CreateBucketIfNotExists() error
 }
 
 type localStackS3Storage struct {
@@ -140,4 +141,29 @@ func (s *localStackS3Storage) UploadFromURL(url string) (string, string, error) 
 	}
 
 	return key, result.ContentType, nil
+}
+
+// CreateBucketIfNotExists creates the S3 bucket if it doesn't exist
+func (s *localStackS3Storage) CreateBucketIfNotExists() error {
+	// Check if bucket exists
+	_, err := s.s3Client.HeadBucket(&s3.HeadBucketInput{
+		Bucket: aws.String(s.bucket),
+	})
+	
+	if err == nil {
+		s.logger.Info("S3 bucket already exists", zap.String("bucket", s.bucket))
+		return nil
+	}
+	
+	// If bucket doesn't exist, create it
+	s.logger.Info("creating S3 bucket", zap.String("bucket", s.bucket))
+	_, err = s.s3Client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(s.bucket),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create S3 bucket %s: %w", s.bucket, err)
+	}
+	
+	s.logger.Info("S3 bucket created successfully", zap.String("bucket", s.bucket))
+	return nil
 }

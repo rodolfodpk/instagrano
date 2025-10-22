@@ -14,6 +14,7 @@ type Cache interface {
 	Get(ctx context.Context, key string) ([]byte, error)
 	Set(ctx context.Context, key string, value []byte, ttl time.Duration) error
 	Delete(ctx context.Context, key string) error
+	Keys(ctx context.Context, pattern string) ([]string, error)
 	Ping(ctx context.Context) error
 	FlushAll(ctx context.Context) error
 	Publish(ctx context.Context, channel string, message string) error
@@ -97,6 +98,11 @@ func (r *RedisCache) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
+// Keys returns all keys matching the given pattern
+func (r *RedisCache) Keys(ctx context.Context, pattern string) ([]string, error) {
+	return r.client.Keys(ctx, pattern).Result()
+}
+
 // Ping checks if Redis is reachable
 func (r *RedisCache) Ping(ctx context.Context) error {
 	return r.client.Ping(ctx).Err()
@@ -138,6 +144,9 @@ func (r *RedisCache) Subscribe(ctx context.Context, channel string) (<-chan stri
 		defer close(stringCh)
 		defer pubsub.Close()
 		for msg := range ch {
+			r.logger.Debug("redis message received",
+				zap.String("channel", channel),
+				zap.String("payload", msg.Payload))
 			select {
 			case stringCh <- msg.Payload:
 			case <-ctx.Done():

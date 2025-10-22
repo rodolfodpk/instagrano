@@ -35,8 +35,10 @@ func JWT(jwtSecret string) fiber.Handler {
 
 		claims := token.Claims.(jwt.MapClaims)
 		userID := uint(claims["user_id"].(float64))
+		username, _ := claims["username"].(string)
 
 		c.Locals("userID", userID)
+		c.Locals("username", username)
 		return c.Next()
 	}
 }

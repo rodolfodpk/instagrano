@@ -2,6 +2,7 @@ package handler
 
 import (
 	"github.com/gofiber/fiber/v2"
+	"github.com/rodolfodpk/instagrano/internal/dto"
 	"github.com/rodolfodpk/instagrano/internal/service"
 )
 
@@ -24,12 +25,7 @@ func NewAuthHandler(authService *service.AuthService) *AuthHandler {
 // @Failure      400  {object}  object{error=string}
 // @Router       /auth/register [post]
 func (h *AuthHandler) Register(c *fiber.Ctx) error {
-	var req struct {
-		Username string `json:"username"`
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
-
+	var req dto.RegisterRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "invalid request"})
 	}
@@ -39,8 +35,16 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	user.Password = ""
-	return c.JSON(fiber.Map{"user": user})
+	response := dto.AuthResponse{
+		User: dto.UserResponse{
+			ID:        user.ID,
+			Username:  user.Username,
+			Email:     user.Email,
+			CreatedAt: user.CreatedAt,
+		},
+		Token: "", // No token on registration
+	}
+	return c.JSON(response)
 }
 
 // Login godoc
@@ -54,11 +58,7 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 // @Failure      401  {object}  object{error=string}
 // @Router       /auth/login [post]
 func (h *AuthHandler) Login(c *fiber.Ctx) error {
-	var req struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
-
+	var req dto.LoginRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "invalid request"})
 	}
@@ -68,6 +68,43 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		return c.Status(401).JSON(fiber.Map{"error": "invalid credentials"})
 	}
 
-	user.Password = ""
-	return c.JSON(fiber.Map{"user": user, "token": token})
+	response := dto.AuthResponse{
+		User: dto.UserResponse{
+			ID:        user.ID,
+			Username:  user.Username,
+			Email:     user.Email,
+			CreatedAt: user.CreatedAt,
+		},
+		Token: token,
+	}
+	return c.JSON(response)
+}
+
+// GetMe godoc
+// @Summary      Get current user
+// @Description  Get the current authenticated user's information
+// @Tags         auth
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {object}  object{user=dto.UserResponse}
+// @Failure      401  {object}  object{error=string}
+// @Router       /auth/me [get]
+func (h *AuthHandler) GetMe(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uint)
+
+	user, err := h.authService.GetUserByID(userID)
+	if err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "user not found"})
+	}
+
+	response := dto.AuthResponse{
+		User: dto.UserResponse{
+			ID:        user.ID,
+			Username:  user.Username,
+			Email:     user.Email,
+			CreatedAt: user.CreatedAt,
+		},
+		Token: "", // Don't return token for security
+	}
+	return c.JSON(response)
 }
