@@ -84,6 +84,24 @@ The system will:
 4. **View your feed** to see posts
 5. **Interact** with posts by liking and commenting
 
+## Cleaning Data
+
+To reset all data (Redis cache, PostgreSQL database, and S3 storage) without tearing down containers:
+
+```bash
+make clean-all
+```
+
+This command will:
+- ✅ Flush all Redis cache data
+- ✅ Drop and recreate all database tables
+- ✅ Re-run all migrations
+- ✅ Clear all S3 storage objects
+
+**Alternative commands:**
+- `make redis-flush` - Clean only Redis cache
+- `make clean` - Stop and remove all containers and volumes (full reset)
+
 ## Troubleshooting
 
 - **Port conflicts**: Make sure ports 8080, 8081, 5432, 6379, and 4566 are available

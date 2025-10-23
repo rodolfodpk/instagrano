@@ -30,6 +30,9 @@ make test-full
 make docker-up
 make migrate
 make start
+
+# Clean all data (Redis, Database, S3)
+make clean-all
 ```
 
 ## Documentation

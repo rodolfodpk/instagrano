@@ -1,4 +1,4 @@
-.PHONY: run test docker-up docker-down migrate clean stop start restart itest health swagger swagger-ui start-all k6-install k6-auth k6-cache k6-posts k6-posts-url k6-post-retrieval k6-journey k6-all
+.PHONY: run test docker-up docker-down migrate clean stop start restart itest health swagger swagger-ui start-all k6-install k6-auth k6-cache k6-posts k6-posts-url k6-post-retrieval k6-journey k6-all clean-all
 
 # Defaults (can be overridden)
 PORT ?= 8080
@@ -78,6 +78,17 @@ redis-cli:
 
 redis-flush:
 	docker-compose exec redis redis-cli FLUSHDB
+
+# Clean all data (Redis, Database, S3) without tearing down containers
+clean-all:
+	@echo "Cleaning Redis cache..."
+	@docker-compose exec redis redis-cli FLUSHDB
+	@echo "Cleaning PostgreSQL database..."
+	@docker-compose exec postgres psql -U postgres -d instagrano -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" > /dev/null 2>&1
+	@$(MAKE) migrate
+	@echo "Cleaning S3 storage..."
+	@aws --endpoint-url=http://localhost:4566 s3 rm s3://instagrano-media --recursive 2>/dev/null || echo "S3 bucket empty or already clean"
+	@echo "✅ All data cleaned successfully!"
 
 # K6 Performance Testing
 .PHONY: k6-install k6-auth k6-cache k6-posts k6-journey k6-all
