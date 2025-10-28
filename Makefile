@@ -33,6 +33,7 @@ docker-down:
 	docker-compose down
 
 migrate:
+	@docker exec -i instagrano-postgres-1 psql -U postgres -c "CREATE DATABASE instagrano;" 2>/dev/null || true
 	docker exec -i instagrano-postgres-1 psql -U postgres -d instagrano < migrations/001_create_users.up.sql
 	docker exec -i instagrano-postgres-1 psql -U postgres -d instagrano < migrations/002_create_posts.up.sql
 	docker exec -i instagrano-postgres-1 psql -U postgres -d instagrano < migrations/003_create_likes.up.sql
